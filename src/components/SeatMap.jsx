@@ -15,6 +15,7 @@ export default function SeatMap({
   privacyBySeat,
   onToggleSeat,
   containerClassName, // allows parent to control height (e.g., "h-full")
+  highlightSeat,      // seat id to show yellow highlight for selected passenger
 }) {
   const resolver = useCallback(
     (col, row) => {
@@ -24,11 +25,27 @@ export default function SeatMap({
       const isSelected = selectedSeat === id;
       const type = seatTypeFor(row, zones);
       const isPrivacy = !!privacyBySeat[id] && !isBooked;
+      const isHighlighted = highlightSeat === id;
 
-      const bg = isBooked ? THEME.booked : isBlocked ? THEME.unavailable : isSelected ? THEME.selected : THEME[type];
-      return { id, bg, selected: isSelected, disabled: isBlocked, isPrivacy, onClick: () => !isBlocked && onToggleSeat(id) };
+      const bg = isBooked
+        ? THEME.booked
+        : isBlocked
+        ? THEME.unavailable
+        : isSelected
+        ? THEME.selected
+        : THEME[type];
+
+      return {
+        id,
+        bg,
+        selected: isSelected,
+        highlighted: isHighlighted,
+        disabled: isBlocked,
+        isPrivacy,
+        onClick: () => !isBlocked && onToggleSeat(id),
+      };
     },
-    [bookedSet, blockedSet, selectedSeat, onToggleSeat, zones, privacyBySeat]
+    [bookedSet, blockedSet, selectedSeat, onToggleSeat, zones, privacyBySeat, highlightSeat]
   );
 
   return (

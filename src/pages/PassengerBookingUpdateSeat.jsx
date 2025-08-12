@@ -23,7 +23,7 @@ export default function PassengerBookingUpdateSeat() {
   const [legIndex, setLegIndex] = useState(0);
   const currentLeg = booking.legs[legIndex];
 
-  // Seed file seats for current leg
+  // Build a pax->seat map from file/JSON for the current leg
   const fileSeatMap = useMemo(() => {
     const m = {};
     for (const p of currentLeg.passengers) if (p.seat) m[p.id] = p.seat;
@@ -34,24 +34,40 @@ export default function PassengerBookingUpdateSeat() {
   const legStorageKey = useMemo(() => `${LS_PREFIX}${currentLeg.key}`, [currentLeg.key]);
   const legPrivacyKey = useMemo(() => `${LS_PRIV_PREFIX}${currentLeg.key}`, [currentLeg.key]);
 
-  const [assignments, setAssignments] = useState(() => loadAssignmentsForLeg(legStorageKey, fileSeatMap, paxIds));
-  const [privacyBySeat, setPrivacyBySeat] = useState(() => loadPrivacyForLeg(legPrivacyKey)); // { seatId: ownerPaxId }
+  const [assignments, setAssignments] = useState(() =>
+    loadAssignmentsForLeg(legStorageKey, fileSeatMap, paxIds)
+  );
+  const [privacyBySeat, setPrivacyBySeat] = useState(() =>
+    loadPrivacyForLeg(legPrivacyKey)
+  ); // { seatId: ownerPaxId }
   const [selectedPassengerId, setSelectedPassengerId] = useState(currentLeg.passengers?.[0]?.id || null);
   const [selectedSeat, setSelectedSeat] = useState(null);
   const [savedFlag, setSavedFlag] = useState(false);
 
-  // Reload when leg changes
+  // On leg change: load from storage, then seed from file if storage is empty
   useEffect(() => {
     const loaded = loadAssignmentsForLeg(legStorageKey, fileSeatMap, paxIds);
     const loadedPrivacy = loadPrivacyForLeg(legPrivacyKey);
+
     setAssignments(loaded);
     setPrivacyBySeat(loadedPrivacy);
     setSelectedPassengerId(currentLeg.passengers?.[0]?.id || null);
     setSelectedSeat(null);
     setSavedFlag(false);
+
+    // If everything is empty but file has seats, seed once from file
+    const hasAnyStoredSeat = Object.values(loaded).some(Boolean);
+    const fileHasSeats = Object.keys(fileSeatMap).length > 0;
+    if (!hasAnyStoredSeat && fileHasSeats) {
+      const seeded = hydrateWithPaxKeys(paxIds, fileSeatMap);
+      setAssignments(seeded);
+      setPrivacyBySeat({});
+      saveAll(legStorageKey, seeded);
+      saveAll(legPrivacyKey, {});
+    }
   }, [legStorageKey, legPrivacyKey, currentLeg.passengers, fileSeatMap, paxIds]);
 
-  // Auto-persist
+  // Auto-persist changes
   useEffect(() => { saveAll(legStorageKey, assignments); }, [legStorageKey, assignments]);
   useEffect(() => { saveAll(legPrivacyKey, privacyBySeat); }, [legPrivacyKey, privacyBySeat]);
 
@@ -74,7 +90,7 @@ export default function PassengerBookingUpdateSeat() {
     setAssignments((prev) => {
       const next = { ...prev };
 
-      // If this seat had someone else's privacy, cancel ALL their privacy seats
+      // If this seat had someone else's privacy, clear all of theirs
       setPrivacyBySeat((prevPriv) => {
         const ownerOfPrivacy = prevPriv[selectedSeat];
         if (ownerOfPrivacy && ownerOfPrivacy !== selectedPassengerId) {
@@ -138,20 +154,29 @@ export default function PassengerBookingUpdateSeat() {
     setTimeout(() => setSavedFlag(false), 1500);
   }, [fileSeatMap, paxIds, legStorageKey, legPrivacyKey]);
 
+  // Explicit confirm/save privacy button
+  const handleConfirmPrivacy = useCallback(() => {
+    saveAll(legPrivacyKey, privacyBySeat);
+    setSavedFlag(true);
+    setTimeout(() => setSavedFlag(false), 1200);
+  }, [legPrivacyKey, privacyBySeat]);
+
   // -------- Privacy logic --------
   const currentSeat = assignments[selectedPassengerId] || "";
   const eligiblePrivacySeats = useMemo(() => {
     if (!currentSeat) return [];
     const col = seatColumn(currentSeat);
     const row = seatRowNum(currentSeat);
+    if (!row) return [];                       // guard against 0 -> avoids A0/B0/C0
     const group = groupForCol(col);
     return group
       .filter((c) => c !== col)
-      .map((c) => `${c}${row}`)
+      .map((c) => `${row}${c}`)                // number first (1B, 1C)
       .filter((sid) => !bookedSet.has(sid));
   }, [currentSeat, bookedSet]);
 
-  const privacyCost = (Object.values(privacyBySeat).filter((pid) => pid === selectedPassengerId).length || 0) * 150;
+  const privacyCost =
+    (Object.values(privacyBySeat).filter((pid) => pid === selectedPassengerId).length || 0) * 150;
 
   const togglePrivacySeat = useCallback((sid) => {
     if (!selectedPassengerId) return;
@@ -176,9 +201,8 @@ export default function PassengerBookingUpdateSeat() {
 
       {/* Mobile-first: stack; md+ becomes 2 columns */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-        {/* Left column: natural height on mobile; sticky/scroll on md+ */}
-        <div className="bg-white border rounded-2xl p-4 sm:p-5"
-             style={{ borderColor: THEME.outline }}>
+        {/* Left column */}
+        <div className="bg-white border rounded-2xl p-4 sm:p-5" style={{ borderColor: THEME.outline }}>
           <div className="md:sticky md:top-4 md:max-h-[calc(100vh-120px)] md:overflow-auto">
             <ControlsBar
               t={t}
@@ -195,8 +219,22 @@ export default function PassengerBookingUpdateSeat() {
               handleBook={handleBook}
               handleSaveLocal={handleSaveLocal}
               handleResetToFile={handleResetToFile}
-              handleCancel={handleCancel}
-              handleClearAll={handleClearAll}
+              handleCancel={() => {
+                if (!selectedPassengerId) return;
+                setAssignments((prev) => ({ ...prev, [selectedPassengerId]: "" }));
+                clearAllPrivacyOfOwner(selectedPassengerId);
+                setSelectedSeat(null);
+                setSavedFlag(false);
+              }}
+              handleClearAll={() => {
+                if (!window.confirm("Clear all local assignments & privacy for this flight?")) return;
+                const empty = {};
+                for (const id of paxIds) empty[id] = "";
+                setAssignments(empty);
+                setPrivacyBySeat({});
+                setSelectedSeat(null);
+                setSavedFlag(false);
+              }}
               savedFlag={savedFlag}
             />
 
@@ -216,17 +254,16 @@ export default function PassengerBookingUpdateSeat() {
               privacyCost={privacyCost}
               togglePrivacySeat={togglePrivacySeat}
               clearPrivacyForCurrent={clearPrivacyForCurrent}
+              onConfirmPrivacy={handleConfirmPrivacy}
+              savedFlag={savedFlag}
             />
           </div>
         </div>
 
-        {/* Right column: auto height on mobile; fixed viewport height only on md+ */}
-        <div className="bg-white border rounded-2xl p-3 sm:p-4"
-             style={{ borderColor: THEME.outline }}>
-          {/* On mobile we let it grow naturally; on md+ we give it its own scroll area */}
+        {/* Right column */}
+        <div className="bg-white border rounded-2xl p-3 sm:p-4" style={{ borderColor: THEME.outline }}>
           <div className="md:h-[80vh] md:overflow-auto">
             <SeatMap
-              // NOTE: don't force h-full on mobile; allow natural stacking
               containerClassName="md:h-full"
               rows={aircraftConfig.rows}
               leftBlock={aircraftConfig.leftBlock}
@@ -237,6 +274,7 @@ export default function PassengerBookingUpdateSeat() {
               selectedSeat={selectedSeat}
               privacyBySeat={privacyBySeat}
               onToggleSeat={handleToggleSeat}
+              highlightSeat={assignments[selectedPassengerId] || ""} // yellow highlight stays
             />
           </div>
         </div>

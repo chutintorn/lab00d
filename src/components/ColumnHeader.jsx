@@ -1,22 +1,43 @@
 import React from "react";
-import { SEAT_W, SEAT_GAP, AISLE_W, ROWNUM_W } from "../config/ui";
 
-export default function ColumnHeader({ leftBlock, rightBlock }) {
+/**
+ * Shows column letters above the seat blocks.
+ * Adds a left spacer so letters align with the first seat (column A).
+ * Also adds an aisle spacer between left/right blocks, and keeps a right spacer
+ * so the total width matches rows that show row numbers on both sides.
+ */
+export default function ColumnHeader({ leftBlock = [], rightBlock = [] }) {
+  const cell =
+    "inline-flex items-center justify-center w-10 h-6 text-sm font-semibold text-gray-800";
+
   return (
-    <div className="flex items-center gap-2 px-4 sm:px-8 md:px-10">
-      <div className={ROWNUM_W} />
-      <div className={`flex flex-1 justify-center ${SEAT_GAP}`}>
+    <div className="flex items-center gap-3">
+      {/* Left spacer: matches SeatRow's left row-number width (w-8) */}
+      <div className="w-8" />
+
+      {/* Left block letters */}
+      <div className="flex gap-2">
         {leftBlock.map((c) => (
-          <div key={`lh-${c}`} className={`text-center font-bold text-xs sm:text-sm ${SEAT_W}`}>{c}</div>
+          <div key={`hdr-left-${c}`} className={cell}>
+            {c}
+          </div>
         ))}
       </div>
-      <div className={AISLE_W} />
-      <div className={`flex flex-1 justify-center ${SEAT_GAP}`}>
+
+      {/* Aisle spacer: matches SeatRow's aisle width */}
+      <div className="w-8" />
+
+      {/* Right block letters */}
+      <div className="flex gap-2">
         {rightBlock.map((c) => (
-          <div key={`rh-${c}`} className={`text-center font-bold text-xs sm:text-sm ${SEAT_W}`}>{c}</div>
+          <div key={`hdr-right-${c}`} className={cell}>
+            {c}
+          </div>
         ))}
       </div>
-      <div className={ROWNUM_W} />
+
+      {/* Right spacer to balance the right-side row number */}
+      <div className="w-8" />
     </div>
   );
 }

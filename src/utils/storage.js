@@ -1,6 +1,16 @@
+// ---- Keys ----
 export const LS_PREFIX = "seatmap:assignment:";   // paxId -> seat
 export const LS_PRIV_PREFIX = "seatmap:privacy:"; // seatId -> ownerPaxId
 
+// ---- First-time/Version seeding helpers (ADD) ----
+export const CURRENT_SEAT_SEED_VER = "2"; // bump when seat-id format/logic changes
+export const seedVerKeyForLeg = (legKey) => `seat:seedver:${legKey}`;
+export const getSeedVersionForLeg = (legKey) =>
+  localStorage.getItem(seedVerKeyForLeg(legKey));
+export const setSeedVersionForLeg = (legKey) =>
+  localStorage.setItem(seedVerKeyForLeg(legKey), CURRENT_SEAT_SEED_VER);
+
+// ---- Utils ----
 export function safeParse(str, fallback) {
   try {
     const parsed = JSON.parse(str);
@@ -16,16 +26,19 @@ export function hydrateWithPaxKeys(paxIds, base) {
   return out;
 }
 
+// Legacy support (kept as-is)
 function migrateOldIfAny(fileSeatMap) {
   const oldRaw = localStorage.getItem("seatBookings:v1");
   if (!oldRaw) return null;
   return { ...fileSeatMap };
 }
 
+// ---- Loaders / Savers ----
 export function loadAssignmentsForLeg(storageKey, fileSeatMap, paxIds) {
   const raw = localStorage.getItem(storageKey);
   if (raw) {
     const parsed = safeParse(raw, {});
+    // If an old array shape somehow appears, fall back to file seats
     if (Array.isArray(parsed)) return hydrateWithPaxKeys(paxIds, fileSeatMap);
     return hydrateWithPaxKeys(paxIds, parsed);
   }
