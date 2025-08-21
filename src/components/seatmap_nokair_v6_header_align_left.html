@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Nok Air – Seat Map with Stand By Privacy (v6)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root{
+    --nok-yellow:#fdb900;
+    --orange-900:#c84e12; /* premium front row */
+    --orange-600:#f08a1f; /* premium */
+    --yellow-400:#facc15; /* happy */
+    --gray-200:#e5e7eb;   /* empty */
+    --gray-400:#9ca3af;   /* blocked */
+    --gray-600:#6b7280;   /* unavailable */
+  }
+  .seat {
+    width: 34px; height: 34px; border-radius: 7px;
+    display: inline-flex; align-items:center; justify-content:center;
+    font-size: 12px; font-weight: 700; cursor: pointer;
+    border: 2px solid rgba(0,0,0,0.06);
+    transition: transform .05s ease, box-shadow .15s ease;
+    background: var(--yellow-400);
+  }
+  .seat:active{ transform: scale(0.98); }
+  .seat.premium-front { background: var(--orange-900); color: white; }
+  .seat.premium       { background: var(--orange-600); color: white; }
+  .seat.happy         { background: var(--yellow-400); color: #1f2937; }
+  .seat.empty         { background: white; }
+  .seat.booked        { background: #e5e7eb; color:#9ca3af; cursor:not-allowed; }
+  .seat.unavailable   { background: var(--gray-600); color:white; cursor:not-allowed; }
+  .seat.blocked       { background: var(--gray-400); color:white; cursor:not-allowed; }
+  .seat.selected      { background: #4caf50; color:white; box-shadow: 0 0 0 3px rgba(34,197,94,.45) inset; }
+  .seat.privacy       { box-shadow: 0 0 0 3px rgba(56,189,248,.55) inset; }
+  .placeholder { width:34px; height:34px; } /* invisible space holder */
+  .grid-col { display:grid; grid-template-rows: repeat(10, 44px); justify-items:center; }
+  .row-index, .col-index { color:#374151; font-weight:700; font-size: 12px; }
+  /* stronger left shift for header letters to align visually with seats */
+  .col-index { transform: translateX(-12px); }
+  .scroll-area { height: 540px; overflow:auto; }
+</style>
+</head>
+<body class="bg-[#fff8cc] text-gray-900">
+  <!-- Top Bar -->
+  <header class="sticky top-0 z-30 bg-[var(--nok-yellow)] border-b border-yellow-500">
+    <div class="max-w-6xl mx-auto flex items-center justify-between p-3">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-full bg-white grid place-items-center font-black text-yellow-500">N</div>
+        <div class="text-xl font-extrabold tracking-wide">NOK AIR</div>
+      </div>
+      <div class="hidden md:flex items-center gap-4">
+        <div class="text-sm"><span class="font-semibold">1 adult</span></div>
+        <div class="text-2xl font-black">THB <span id="topTotal">2,658.00</span></div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto grid grid-cols-12 gap-4 p-4">
+    <!-- Left panel -->
+    <aside class="col-span-12 lg:col-span-4">
+      <div class="bg-yellow-50 border border-yellow-300 rounded-xl p-4">
+        <div class="flex items-center gap-2 text-yellow-900 font-semibold mb-3">
+          <span class="text-lg">✈️ Don Mueang (Bangkok) to Chiang Mai</span>
+        </div>
+
+        <div class="bg-white rounded-lg border border-yellow-300 p-3 mb-4">
+          <div class="text-xs text-gray-600">Passenger</div>
+          <div class="flex items-center justify-between mt-1">
+            <div class="font-bold">CHUTINTORN SRISITTIKUM</div>
+            <div id="currentSeatBadge" class="px-3 py-1 rounded-lg bg-[var(--nok-yellow)] text-gray-900 font-bold">—</div>
+          </div>
+          <div class="mt-2 text-xs text-gray-600">Stand By Privacy seats: <span id="privacyEcho">—</span></div>
+          <div class="mt-3">
+            <button id="openSps" class="rounded-lg border border-yellow-400 bg-yellow-300/90 px-3 py-2 font-extrabold text-gray-900 hover:bg-yellow-300">
+              Stand By Privacy Seats (6B, 6C)
+            </button>
+          </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
+          <div class="flex items-center gap-3">
+            <div class="w-7 h-7 seat premium-front"></div>
+            <div>
+              <div class="font-semibold">Nok Premium Seat<br/>Front Row</div>
+              <div class="text-xs text-gray-600">500.00</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="w-7 h-7 seat premium"></div>
+            <div>
+              <div class="font-semibold">Nok Premium Seat</div>
+              <div class="text-xs text-gray-600">350.00</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="w-7 h-7 seat happy"></div>
+            <div>
+              <div class="font-semibold">Nok Happy Seat</div>
+              <div class="text-xs text-gray-600">Free</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="w-7 h-7 seat booked"></div>
+            <div class="font-semibold">Booked Seat</div>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="w-7 h-7 seat unavailable"></div>
+            <div class="font-semibold">Unavailable Seat</div>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="w-7 h-7 seat blocked"></div>
+            <div class="font-semibold">Blocked Seat</div>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="w-7 h-7 seat selected"></div>
+            <div class="font-semibold">Selected Seat</div>
+          </div>
+        </div>
+
+        <div class="mt-6">
+          <div class="text-sm font-bold mb-2">Seat Description</div>
+          <p class="text-sm text-gray-700 leading-relaxed">
+            Nok Air’s in-flight seats are divided into 3 types: Nok Premium Seat Front Row,
+            Nok Premium Seat and Nok Happy Seat.
+          </p>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Right seat map -->
+    <section class="col-span-12 lg:col-span-8">
+      <div class="rounded-xl border border-yellow-300 bg-white">
+        <div class="rounded-t-xl bg-[var(--nok-yellow)] text-center font-bold py-3">
+          Selecting seat for <span class="uppercase">CHUTINTORN</span> for Don Mueang (Bangkok) to Chiang Mai
+        </div>
+
+        <div class="p-4 scroll-area">
+          <!-- Column headers (now same grid as seats, padding & gaps aligned) -->
+          <div class="grid grid-cols-[40px_repeat(3,44px)_44px_repeat(3,44px)_40px] gap-x-6 px-6 items-center mb-2">
+            <div></div>
+            <div class="col-index text-center">A</div>
+            <div class="col-index text-center">B</div>
+            <div class="col-index text-center">C</div>
+            <div></div> <!-- aisle spacer -->
+            <div class="col-index text-center">H</div>
+            <div class="col-index text-center">J</div>
+            <div class="col-index text-center">K</div>
+            <div></div>
+          </div>
+
+          <!-- Seat grid -->
+          <div id="seatGrid" class="grid grid-cols-[40px_repeat(3,44px)_44px_repeat(3,44px)_40px] gap-x-6 px-6">
+            <div id="leftRowNums"  class="grid grid-rows-10 gap-3 justify-items-center"></div>
+            <div id="colA" class="grid-col gap-3"></div>
+            <div id="colB" class="grid-col gap-3"></div>
+            <div id="colC" class="grid-col gap-3"></div>
+            <div></div> <!-- aisle spacer -->
+            <div id="colH" class="grid-col gap-3"></div>
+            <div id="colJ" class="grid-col gap-3"></div>
+            <div id="colK" class="grid-col gap-3"></div>
+            <div id="rightRowNums" class="grid grid-rows-10 gap-3 justify-items-center"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Stand By Privacy Modal -->
+  <div id="spsOverlay" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40">
+    <div class="w-[92%] max-w-md rounded-xl border border-gray-200 bg-white shadow-2xl">
+      <div class="border-b border-gray-200 px-4 py-3 font-extrabold">Stand By Privacy Seat</div>
+      <div class="px-4 py-4">
+        <div class="text-sm text-gray-600 mb-2">Select seat(s) to keep empty next to you.</div>
+        <div class="font-semibold">Available on your row:</div>
+        <div class="mt-3 flex flex-wrap gap-4">
+          <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" class="h-4 w-4 accent-yellow-500 sps-check" value="6B" />
+            <span>6B</span>
+          </label>
+          <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" class="h-4 w-4 accent-yellow-500 sps-check" value="6C" />
+            <span>6C</span>
+          </label>
+        </div>
+
+        <div class="mt-4 flex items-center justify-between font-semibold">
+          <span>Price</span>
+          <span>THB 150 / seat</span>
+        </div>
+        <div class="mt-2 flex items-center justify-between text-lg font-extrabold">
+          <span>Total</span>
+          <span id="spsModalTotal">THB 0</span>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 border-t border-gray-200 px-4 py-3">
+        <button id="spsCancel" class="rounded-lg bg-gray-100 px-4 py-2 font-semibold text-gray-800 hover:bg-gray-200">Cancel</button>
+        <button id="spsConfirm" class="rounded-lg border border-yellow-400 bg-yellow-300 px-4 py-2 font-extrabold text-gray-900 hover:bg-yellow-300">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ---------- Seat map generation ----------
+    const rows = Array.from({length:10}, (_,i)=>i+1);
+    const leftNumEl = document.getElementById('leftRowNums');
+    const rightNumEl = document.getElementById('rightRowNums');
+    function fillRowNums(el){
+      el.innerHTML = '';
+      rows.forEach(i => {
+        const d = document.createElement('div');
+        d.className = 'row-index';
+        d.textContent = i;
+        el.appendChild(d);
+      });
+    }
+    fillRowNums(leftNumEl); fillRowNums(rightNumEl);
+
+    const colMap = {
+      'A': document.getElementById('colA'),
+      'B': document.getElementById('colB'),
+      'C': document.getElementById('colC'),
+      'H': document.getElementById('colH'),
+      'J': document.getElementById('colJ'),
+      'K': document.getElementById('colK'),
+    };
+
+    // Config & helpers
+    const isFrontRow = (r)=> r === 1;
+    const isPremium  = (r)=> r >= 1 && r <= 6; // 1-6 premium (front row special)
+    const isBooked = (r,c)=> (r===2 && c==='C') || (r===10 && c==='J');
+    const isUnavailable = (r,c)=> (r===5 && c==='A') || (r===8 && c==='C'); // keep 6A available
+    const isBlocked = (r,c)=> (r===4 && c==='B') || (r===7 && c==='H');
+
+    // Remove right row 1 (H/J/K) but keep left 1A/1B/1C
+    const shouldPlaceholder = (r, c) => r === 1 && (c === 'H' || c === 'J' || c === 'K');
+
+    function createSeat(r, c) {
+      if (shouldPlaceholder(r,c)) {
+        const p = document.createElement('div');
+        p.className = 'placeholder';
+        return p;
+      }
+      const el = document.createElement('div');
+      el.classList.add('seat');
+      el.dataset.row = r; el.dataset.col = c;
+      el.title = r + c;
+
+      if (isFrontRow(r)) el.classList.add('premium-front');
+      else if (isPremium(r)) el.classList.add('premium');
+      else el.classList.add('happy');
+
+      if (isBooked(r,c)) { el.className = 'seat booked'; }
+      else if (isUnavailable(r,c)) { el.className = 'seat unavailable'; }
+      else if (isBlocked(r,c)) { el.className = 'seat blocked'; }
+      return el;
+    }
+
+    const order = ['A','B','C','H','J','K'];
+    rows.forEach(r => {
+      order.forEach(c => {
+        const seat = createSeat(r,c);
+        colMap[c].appendChild(seat);
+      });
+    });
+
+    // ---------- Interaction & pricing ----------
+    let selected = null; // main passenger seat
+    const privacySelected = new Set(); // 6B/6C
+    const SPS_PRICE = 150;
+    const base = 2658.00;
+
+    const badge = document.getElementById('currentSeatBadge');
+    const topTotal = document.getElementById('topTotal');
+    const privacyEcho = document.getElementById('privacyEcho');
+
+    const priceBySeat = (r,c) => {
+      if (r===1) return 500;
+      if (r>=2 && r<=6) return 350;
+      return 0;
+    };
+
+    function canSelect(el) {
+      return el.classList.contains('seat') &&
+             !el.classList.contains('booked') &&
+             !el.classList.contains('blocked') &&
+             !el.classList.contains('unavailable');
+    }
+
+    function updateTotals() {
+      const seatAdd = selected ? priceBySeat(Number(selected.dataset.row), selected.dataset.col) : 0;
+      const spsAdd = SPS_PRICE * privacySelected.size;
+      topTotal.textContent = (base + seatAdd + spsAdd).toLocaleString('en-US', {minimumFractionDigits:2});
+      badge.textContent = selected ? (selected.dataset.row + selected.dataset.col) : '—';
+      privacyEcho.textContent = privacySelected.size ? Array.from(privacySelected).join(', ') : '—';
+    }
+
+    function selectSeat(el) {
+      if (!canSelect(el)) return;
+      if (selected) selected.classList.remove('selected');
+      selected = el;
+      selected.classList.add('selected');
+      updateTotals();
+    }
+
+    document.querySelectorAll('.seat').forEach(seat => {
+      seat.addEventListener('click', () => selectSeat(seat));
+    });
+
+    // Preselect 6A
+    const pre = Array.from(document.querySelectorAll('.seat')).find(s => s.dataset.row==='6' && s.dataset.col==='A');
+    if (pre) selectSeat(pre);
+
+    // ---------- Stand By Privacy Modal ----------
+    const spsOverlay = document.getElementById('spsOverlay');
+    const openSps = document.getElementById('openSps');
+    const spsCancel = document.getElementById('spsCancel');
+    const spsConfirm = document.getElementById('spsConfirm');
+    const spsModalTotal = document.getElementById('spsModalTotal');
+
+    function updateSpsModalTotal() {
+      const checks = Array.from(document.querySelectorAll('.sps-check'));
+      const n = checks.filter(c => c.checked).length;
+      spsModalTotal.textContent = 'THB ' + (n * SPS_PRICE).toLocaleString('en-US');
+    }
+
+    openSps.addEventListener('click', () => {
+      // Sync checks from current privacy selection
+      document.querySelectorAll('.sps-check').forEach(cb => {
+        cb.checked = privacySelected.has(cb.value);
+      });
+      updateSpsModalTotal();
+      spsOverlay.classList.remove('hidden');
+      spsOverlay.classList.add('flex');
+    });
+
+    spsCancel.addEventListener('click', () => {
+      spsOverlay.classList.add('hidden');
+      spsOverlay.classList.remove('flex');
+    });
+    spsOverlay.addEventListener('click', (e) => {
+      if (e.target === spsOverlay) {
+        spsOverlay.classList.add('hidden');
+        spsOverlay.classList.remove('flex');
+      }
+    });
+    document.addEventListener('change', (e) => {
+      if (e.target && e.target.classList && e.target.classList.contains('sps-check')) {
+        updateSpsModalTotal();
+      }
+    });
+
+    spsConfirm.addEventListener('click', () => {
+      // Read choices
+      const chosen = Array.from(document.querySelectorAll('.sps-check')).filter(cb => cb.checked).map(cb => cb.value);
+      // Clear previous privacy marks
+      privacySelected.clear();
+      document.querySelectorAll('.seat.privacy').forEach(el => el.classList.remove('privacy'));
+      // Mark seats if they exist and are not booked/blocked/unavailable
+      chosen.forEach(code => {
+        const row = code.slice(0, -1);
+        const col = code.slice(-1);
+        const el = Array.from(document.querySelectorAll('.seat')).find(s => s.dataset.row===row && s.dataset.col===col);
+        if (el && canSelect(el)) {
+          el.classList.add('privacy');
+          privacySelected.add(code);
+        }
+      });
+      updateTotals();
+      spsOverlay.classList.add('hidden');
+      spsOverlay.classList.remove('flex');
+    });
+  </script>
+</body>
+</html>
