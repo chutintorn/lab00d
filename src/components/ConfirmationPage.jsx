@@ -1,6 +1,12 @@
 import React, { useMemo, useState } from "react";
 
-export default function ConfirmationPage() {
+/**
+ * ConfirmationPage
+ * - Preserves all existing UI and i18n
+ * - Fixes Manage Booking "Continue" to navigate to Booking Page (Seat + Privacy) in same tab
+ * - Optional prop: onNavigateToBooking() from parent; otherwise uses DOM/hash fallbacks
+ */
+export default function ConfirmationPage({ onNavigateToBooking }) {
   // ---- Brand + config ----
   const NOK_YELLOW = "#fdb900";
   const SPS_PRICE = 150;
@@ -154,17 +160,61 @@ export default function ConfirmationPage() {
     setSelectedSeats([]);
   };
 
-  // Manage Privacy modal (mock redirect)
+  // --------- NEW: Safe navigate-to-booking helpers ----------
+  const goToBookingPage = () => {
+    // 1) Use parent prop if provided (ideal; no reload)
+    if (typeof onNavigateToBooking === "function") {
+      try {
+        onNavigateToBooking();
+        return;
+      } catch {}
+    }
+
+    // 2) Try to click a tab button marked for booking
+    const byDataAttr = document.querySelector('button[data-tab="booking"]');
+    if (byDataAttr) {
+      byDataAttr.click();
+      return;
+    }
+
+    // 3) Try to find a button whose text contains "booking"
+    const btns = Array.from(document.querySelectorAll("button"));
+    const byText = btns.find((b) => /booking/i.test(b.textContent || ""));
+    if (byText) {
+      byText.click();
+      return;
+    }
+
+    // 4) Fallback: set a hash for your App to react to (same tab)
+    window.location.hash = "#booking";
+    // (Optional, not recommended): force reload if your App reads on initial mount
+    // window.location.reload();
+  };
+
+  // Manage Privacy modal open/close
   const openManage = () => setShowManage(true);
   const closeManage = () => setShowManage(false);
+
+  // --------- CHANGED: this used to open a new tab; now it navigates within the app ----------
   const handleManageSubmit = () => {
+    // Keep the URL composition (handy if you still use it later)
     const url =
       `${MANAGE_BOOKING_URL}?ref=` +
       encodeURIComponent(mpRef || "QIYR09") +
       `&ln=` +
       encodeURIComponent(mpLastName || "SRISITTIKUM");
-    window.open(url, "_blank", "noopener,noreferrer");
+
+    // Save for potential prefill on Booking page
+    try {
+      sessionStorage.setItem(
+        "manageBookingPrefill",
+        JSON.stringify({ ref: mpRef || "QIYR09", ln: mpLastName || "SRISITTIKUM", url })
+      );
+    } catch {}
+
+    // Close modal then navigate to Booking Page (Seat + Privacy) in same tab
     setShowManage(false);
+    goToBookingPage();
   };
 
   return (
@@ -431,7 +481,11 @@ export default function ConfirmationPage() {
               <button className="rounded-lg border border-gray-200 bg-green-50 px-3 py-2 font-bold">
                 {t("manageBooking")}
               </button>
-              <button className="rounded-lg border border-sky-400 bg-green-50 px-3 py-2 font-bold" onClick={openManage}>
+              <button
+                className="rounded-lg border border-sky-400 bg-green-50 px-3 py-2 font-bold"
+                onClick={openManage}
+                data-testid="manage-privacy-btn"
+              >
                 {t("managePrivacy")}
               </button>
             </div>
@@ -441,7 +495,10 @@ export default function ConfirmationPage() {
 
       {/* SPS Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={(e) => e.target === e.currentTarget && setShowModal(false)}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={(e) => e.target === e.currentTarget && setShowModal(false)}
+        >
           <div className="w-[92%] max-w-md rounded-xl border border-gray-200 bg-white shadow-2xl">
             <div className="border-b border-gray-200 px-4 py-3 font-extrabold">{t("spsTitle")}</div>
             <div className="px-4 py-4">
@@ -449,7 +506,12 @@ export default function ConfirmationPage() {
               <div className="mt-3 flex flex-wrap gap-4">
                 {AVAILABLE_SPS_SEATS.map((seat) => (
                   <label key={seat} className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" className="h-4 w-4 accent-yellow-500" checked={selectedSeats.includes(seat)} onChange={() => toggleSeat(seat)} />
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-yellow-500"
+                      checked={selectedSeats.includes(seat)}
+                      onChange={() => toggleSeat(seat)}
+                    />
                     <span>{seat}</span>
                   </label>
                 ))}
@@ -464,10 +526,16 @@ export default function ConfirmationPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 border-t border-gray-200 px-4 py-3">
-              <button onClick={handleCancel} className="rounded-lg bg-gray-100 px-4 py-2 font-semibold text-gray-800 hover:bg-gray-200">
+              <button
+                onClick={handleCancel}
+                className="rounded-lg bg-gray-100 px-4 py-2 font-semibold text-gray-800 hover:bg-gray-200"
+              >
                 {t("cancel")}
               </button>
-              <button onClick={handleConfirm} className="rounded-lg border border-yellow-400 bg-yellow-300 px-4 py-2 font-extrabold text-gray-900 hover:bg-yellow-300">
+              <button
+                onClick={handleConfirm}
+                className="rounded-lg border border-yellow-400 bg-yellow-300 px-4 py-2 font-extrabold text-gray-900 hover:bg-yellow-300"
+              >
                 {t("confirm")}
               </button>
             </div>
@@ -477,22 +545,54 @@ export default function ConfirmationPage() {
 
       {/* Manage Privacy Modal (i18n) */}
       {showManage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={(e) => e.target === e.currentTarget && closeManage()}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={(e) => e.target === e.currentTarget && closeManage()}
+        >
           <div className="w-[92%] max-w-md rounded-xl border border-gray-200 bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
               <h2 className="font-extrabold">{t("mpTitle")}</h2>
-              <button aria-label="Close" onClick={closeManage} className="text-2xl leading-none px-1">×</button>
+              <button aria-label="Close" onClick={closeManage} className="text-2xl leading-none px-1">
+                ×
+              </button>
             </div>
-            <form className="px-4 py-4 space-y-3" onSubmit={(e) => { e.preventDefault(); handleManageSubmit(); }}>
+            <form
+              className="px-4 py-4 space-y-3"
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleManageSubmit();
+              }}
+            >
               <label className="block">
-                <span className="text-sm text-gray-700">{t("mpRef")} <span className="text-red-500">*</span></span>
-                <input type="text" placeholder={lang === "th" ? "เช่น QIYR09" : "e.g., QIYR09"} value={mpRef} onChange={(e) => setMpRef(e.target.value)} className="mt-1 w-full rounded-lg border p-3 focus:outline-none focus:ring-2 focus:ring-yellow-400" />
+                <span className="text-sm text-gray-700">
+                  {t("mpRef")} <span className="text-red-500">*</span>
+                </span>
+                <input
+                  type="text"
+                  placeholder={lang === "th" ? "เช่น QIYR09" : "e.g., QIYR09"}
+                  value={mpRef}
+                  onChange={(e) => setMpRef(e.target.value)}
+                  className="mt-1 w-full rounded-lg border p-3 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                />
               </label>
               <label className="block">
-                <span className="text-sm text-gray-700">{t("mpLast")} <span className="text-red-500">*</span></span>
-                <input type="text" placeholder={lang === "th" ? "เช่น SRISITTIKUM" : "e.g., SRISITTIKUM"} value={mpLastName} onChange={(e) => setMpLastName(e.target.value)} className="mt-1 w-full rounded-lg border p-3 focus:outline-none focus:ring-2 focus:ring-yellow-400" />
+                <span className="text-sm text-gray-700">
+                  {t("mpLast")} <span className="text-red-500">*</span>
+                </span>
+                <input
+                  type="text"
+                  placeholder={lang === "th" ? "เช่น SRISITTIKUM" : "e.g., SRISITTIKUM"}
+                  value={mpLastName}
+                  onChange={(e) => setMpLastName(e.target.value)}
+                  className="mt-1 w-full rounded-lg border p-3 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                />
               </label>
-              <button type="submit" className="w-full rounded-lg font-bold text-gray-900 py-3" style={{ backgroundColor: NOK_YELLOW }}>
+              <button
+                type="submit"
+                className="w-full rounded-lg font-bold text-gray-900 py-3"
+                style={{ backgroundColor: NOK_YELLOW }}
+                data-testid="manage-continue-btn"
+              >
                 {t("mpContinue")}
               </button>
             </form>
@@ -527,14 +627,24 @@ function Table({ title, rows }) {
         {rows.map((r, idx) =>
           r.isSubtotal ? (
             <tr key={idx} className="font-semibold">
-              <td className="border-b border-gray-200 p-2" colSpan={2}>Subtotal</td>
-              <td className="border-b border-gray-200 p-2 text-right">{Array.isArray(r.cells) ? r.cells[2] : r.cells}</td>
+              <td className="border-b border-gray-200 p-2" colSpan={2}>
+                Subtotal
+              </td>
+              <td className="border-b border-gray-200 p-2 text-right">
+                {Array.isArray(r.cells) ? r.cells[2] : r.cells}
+              </td>
             </tr>
           ) : (
             <tr key={idx}>
-              <td className="border-b border-gray-200 p-2">{Array.isArray(r.cells) ? r.cells[0] : r.cells}</td>
-              <td className="border-b border-gray-200 p-2">{Array.isArray(r.cells) ? r.cells[1] : ""}</td>
-              <td className="border-b border-gray-200 p-2 text-right">{Array.isArray(r.cells) ? r.cells[2] : ""}</td>
+              <td className="border-b border-gray-200 p-2">
+                {Array.isArray(r.cells) ? r.cells[0] : r.cells}
+              </td>
+              <td className="border-b border-gray-200 p-2">
+                {Array.isArray(r.cells) ? r.cells[1] : ""}
+              </td>
+              <td className="border-b border-gray-200 p-2 text-right">
+                {Array.isArray(r.cells) ? r.cells[2] : ""}
+              </td>
             </tr>
           )
         )}
