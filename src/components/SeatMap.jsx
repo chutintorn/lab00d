@@ -1,8 +1,9 @@
 import React, { useCallback } from "react";
 import ColumnHeader from "./ColumnHeader";
 import SeatRow from "./SeatRow";
-import { seatId, seatTypeFor } from "../utils/seatHelpers";
+import { seatId, seatTypeForSeat } from "../utils/seatHelpers";
 import { THEME } from "../config/theme";
+import { ZONE_PRICE_THB, MARKUP_PER_ZONE_THB } from "../utils/pricingConstants";
 
 export default function SeatMap({
   rows,
@@ -14,8 +15,12 @@ export default function SeatMap({
   selectedSeat,
   privacyBySeat,
   onToggleSeat,
-  containerClassName, // allows parent to control height (e.g., "h-full")
-  highlightSeat,      // seat id to show yellow highlight for selected passenger
+  containerClassName,
+  highlightSeat,
+  showPrices = false,
+
+  // NEW: needed so we can phrase tooltips like "your privacy seat"
+  selectedPassengerId = null,
 }) {
   const resolver = useCallback(
     (col, row) => {
@@ -23,8 +28,34 @@ export default function SeatMap({
       const isBooked = bookedSet.has(id);
       const isBlocked = blockedSet.has(id);
       const isSelected = selectedSeat === id;
-      const type = seatTypeFor(row, zones);
-      const isPrivacy = !!privacyBySeat[id] && !isBooked;
+
+      const zoneType = seatTypeForSeat(row, col, zones) || "happy";
+      const baseTHB = ZONE_PRICE_THB[zoneType] ?? 0;
+
+      const privacyOwner = privacyBySeat[id] || null;
+      const isPrivacy = !!privacyOwner && !isBooked;
+
+      // price used for display (when showPrices is on)
+      const priceTHB = isPrivacy && privacyOwner !== selectedPassengerId
+        ? baseTHB + (MARKUP_PER_ZONE_THB[zoneType] ?? 0) // others pay base + fixed markup
+        : baseTHB; // free seat or your own privacy seat => base
+
+      // subtle tooltip text (no color changes per your request)
+      let title = `Seat ${id}`;
+      if (showPrices) {
+        const m = MARKUP_PER_ZONE_THB[zoneType] ?? 0;
+        if (isPrivacy && privacyOwner !== selectedPassengerId) {
+          title += ` – ${priceTHB.toLocaleString("th-TH")} THB (base ${baseTHB.toLocaleString("th-TH")} + markup ${m})`;
+        } else {
+          title += ` – ${baseTHB.toLocaleString("th-TH")} THB`;
+        }
+      }
+      if (isPrivacy) {
+        title += privacyOwner === selectedPassengerId
+          ? " – your privacy seat"
+          : " – privacy seat held by another passenger";
+      }
+
       const isHighlighted = highlightSeat === id;
 
       const bg = isBooked
@@ -33,7 +64,7 @@ export default function SeatMap({
         ? THEME.unavailable
         : isSelected
         ? THEME.selected
-        : THEME[type];
+        : THEME[zoneType];
 
       return {
         id,
@@ -43,9 +74,25 @@ export default function SeatMap({
         disabled: isBlocked,
         isPrivacy,
         onClick: () => !isBlocked && onToggleSeat(id),
+
+        // extra fields used by SeatRow
+        priceTHB,
+        showPrices,
+        zoneType,
+        title, // SeatRow will use this for the button tooltip
       };
     },
-    [bookedSet, blockedSet, selectedSeat, onToggleSeat, zones, privacyBySeat, highlightSeat]
+    [
+      bookedSet,
+      blockedSet,
+      selectedSeat,
+      onToggleSeat,
+      zones,
+      privacyBySeat,
+      highlightSeat,
+      showPrices,
+      selectedPassengerId,
+    ]
   );
 
   return (
@@ -62,6 +109,7 @@ export default function SeatMap({
             leftBlock={leftBlock}
             rightBlock={rightBlock}
             resolver={resolver}
+            showPrices={showPrices}
           />
         ))}
       </div>

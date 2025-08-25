@@ -4,70 +4,57 @@ import { THEME } from "../config/theme";
 export default function PrivacyControls({
   t,
   currentSeat,
-  eligiblePrivacySeats = [],
-  privacyBySeat = {},
+  eligiblePrivacySeats,
+  privacyBySeat,
   selectedPassengerId,
 
   // totals
   privacyCost,
 
-  // zone-specific values passed from parent
-  unitPrivacyFeeTHB = 0,  // 200 / 150 / 100 ตามโซน
-  refundPerSeatTHB = 0,   // ยอดคืนต่อ 1 privacy seat ถ้าถูกซื้อ
+  // NEW: dynamic fee & refund per seat for the current passenger's zone
+  unitPrivacyFeeTHB = 0,
+  refundPerSeatTHB = 0,
 
   togglePrivacySeat,
   clearPrivacyForCurrent,
-  onConfirmPrivacy, // optional
+  onConfirmPrivacy, // optional; if you don't persist separately, you can omit
   savedFlag,        // optional
 }) {
   const L = {
-    title: t?.privacy?.title ?? "Privacy seats for this passenger",
-    note:
-      t?.privacy?.note ??
-      "You can hold empty adjacent seats for this passenger. Others can still buy them.",
-
-    taken: t?.privacy?.taken ?? "Already marked as privacy by another passenger.",
-    clear: t?.privacy?.clear ?? "Clear Privacy",
-    total: t?.privacy?.total ?? "Privacy cost",
-
-    feePerSeat: t?.privacy?.feePerSeat ?? "Privacy fee per seat",
-    refundTitle: t?.privacy?.refundTitle ?? "Refund if sold",
-    refundLine:
-      t?.privacy?.refundLine ??
-      "You pay {fee} THB per seat. If someone purchases that seat, you'll be refunded {refund} THB per sold seat.",
-
-    confirm: t?.privacy?.confirm ?? "Save privacy",
+    title: t?.privacy?.title ?? "Privacy",
+    note: t?.privacy?.note ?? "You can hold empty adjacent seats for this passenger.",
+    taken: t?.privacy?.taken ?? "This privacy seat is already taken.",
+    clear: t?.privacy?.clear ?? "Clear privacy",
+    total: t?.privacy?.total ?? "Privacy total",
+    feePerSeat: t?.privacy?.feePerSeat ?? "Privacy per seat",
+    refundTitle: t?.privacy?.refundTitle ?? "Refund if a privacy seat is sold",
+    refundLine: t?.privacy?.refundLine ?? "You paid {fee} THB per seat. If someone purchases that seat, you’ll be refunded {refund} THB per sold seat.",
+    confirm: t?.privacy?.confirm ?? "Confirm privacy",
+    savedHint: t?.savedHint ?? "Saved locally.",
     savedTick: t?.savedTick ?? "Saved!",
   };
 
   return (
     <div className="mt-3 pt-3 border-t" style={{ borderColor: THEME.outline }}>
       <div className="font-semibold mb-2">{L.title}</div>
-
       {!currentSeat ? (
         <div className="text-xs text-gray-500">—</div>
       ) : (
         <div className="space-y-3">
-          {/* Note */}
           <div className="text-xs text-gray-600">{L.note}</div>
 
           {/* Fee by zone + Refund info */}
-          <div
-            className="rounded-lg border p-2 bg-gray-50 text-xs"
-            style={{ borderColor: THEME.outline }}
-          >
+          <div className="rounded-lg border p-2 bg-gray-50 text-xs" style={{ borderColor: THEME.outline }}>
             <div className="flex items-center justify-between">
               <span className="text-gray-700">{L.feePerSeat}</span>
-              <span className="font-semibold">
-                {unitPrivacyFeeTHB.toLocaleString("th-TH")} THB
-              </span>
+              <span className="font-semibold">{unitPrivacyFeeTHB.toLocaleString("th-TH")} THB</span>
             </div>
-
             <div className="mt-1 text-gray-700 font-medium">{L.refundTitle}</div>
             <div className="text-gray-600">
               {L.refundLine
                 .replace("{fee}", unitPrivacyFeeTHB.toLocaleString("th-TH"))
-                .replace("{refund}", refundPerSeatTHB.toLocaleString("th-TH"))}
+                .replace("{refund}", refundPerSeatTHB.toLocaleString("th-TH"))
+              }
             </div>
           </div>
 
@@ -77,16 +64,11 @@ export default function PrivacyControls({
               const ownedBy = privacyBySeat[sid];
               const checked = ownedBy === selectedPassengerId;
               const disabled = !!ownedBy && ownedBy !== selectedPassengerId;
-
               return (
                 <label
                   key={sid}
-                  className={[
-                    "inline-flex items-center gap-2 border rounded-md px-2 py-1 text-sm",
-                    disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
-                  ].join(" ")}
+                  className={`inline-flex items-center gap-2 border rounded-md px-2 py-1 text-sm ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
                   style={{ borderColor: THEME.outline }}
-                  title={disabled ? L.taken : undefined}
                 >
                   <input
                     type="checkbox"
@@ -107,12 +89,8 @@ export default function PrivacyControls({
           {/* Totals + actions */}
           <div className="flex items-center justify-between text-sm">
             <div>
-              {L.total}:{" "}
-              <span className="font-semibold">
-                {Number(privacyCost || 0).toLocaleString("th-TH")} THB
-              </span>
+              {L.total}: <span className="font-semibold">{privacyCost.toLocaleString("th-TH")} THB</span>
             </div>
-
             <div className="flex gap-2">
               {onConfirmPrivacy && (
                 <button
@@ -132,10 +110,7 @@ export default function PrivacyControls({
               </button>
             </div>
           </div>
-
-          {savedFlag && (
-            <div className="text-xs text-emerald-600">{L.savedTick}</div>
-          )}
+          {savedFlag && <div className="text-xs text-emerald-600">{L.savedTick}</div>}
         </div>
       )}
     </div>

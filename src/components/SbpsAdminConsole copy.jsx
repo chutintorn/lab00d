@@ -1,4 +1,3 @@
-// src/components/SbpsAdminConsole.jsx
 import React, { useMemo, useState } from "react";
 
 const STEPS = [
@@ -25,9 +24,6 @@ export default function SbpsAdminConsole() {
   const [status, setStatus] = useState("");
   const [flightStatus, setFlightStatus] = useState("");
   const [rows] = useState(DEMO_DATA);
-
-  // NEW: toggle to show/hide the flow (default hidden)
-  const [showFlow, setShowFlow] = useState(false);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -87,154 +83,75 @@ export default function SbpsAdminConsole() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <div className="max-w-6xl mx-auto px-4 md:px-6 py-10">
-        {/* Top admin header + toggle */}
         <header className="flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">
-              SBPS Admin & Call Center Console
-            </h2>
-            <p className="text-slate-600 text-sm mt-1">
-              Manage standby privacy seats — search, filter, and process refunds.
-            </p>
+            <h3 className="text-3xl md:text-4xl font-extrabold tracking-tight">Stand by Privacy End-to-End Flow</h3>
+            <p className="text-slate-600 text-sm mt-1">Horizontal infographic of the Standby Privacy Seat lifecycle</p>
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-slate-200 shadow-sm text-xs font-semibold"><span className="w-2.5 h-2.5 rounded-full bg-amber-400" />Anchor booked</span>
+              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-slate-200 shadow-sm text-xs font-semibold"><span className="w-2.5 h-2.5 rounded-full bg-sky-400" />SBPS / Recheck / Admin</span>
+              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-slate-200 shadow-sm text-xs font-semibold">⏱ Recheck cycle: every 6h & payment time</span>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              className={`inline-flex items-center justify-center px-4 py-2 rounded-xl font-bold shadow-sm border transition
-                ${showFlow ? "bg-amber-500 text-white border-amber-600 hover:opacity-90" : "bg-white border-slate-200 hover:bg-slate-50"}
-              `}
-              onClick={() => setShowFlow(v => !v)}
-              aria-pressed={showFlow}
-            >
-              {showFlow ? "Hide Flow" : "Show Standby Privacy Flow"}
-            </button>
-            <button
-              className="inline-flex items-center justify-center px-4 py-2 rounded-xl font-bold shadow-sm bg-amber-400 border border-amber-500"
-              onClick={() => window.print()}
-              title="Print / Save as PDF"
-            >
-              🖨️ Print
-            </button>
-          </div>
+          <button className="inline-flex items-center justify-center px-4 py-2 rounded-xl font-bold shadow-sm bg-amber-400 border border-amber-500" onClick={() => window.print()}>🖨️ Print / Save as PDF</button>
         </header>
 
-        {/* Flow section (default hidden). When shown, it appears on TOP. */}
-        {showFlow && (
-          <section className="my-7">
-            <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
-              <div>
-                <h3 className="text-3xl md:text-4xl font-extrabold tracking-tight">
-                  Stand by Privacy End-to-End Flow
-                </h3>
-                <p className="text-slate-600 text-sm mt-1">
-                  Horizontal infographic of the Standby Privacy Seat lifecycle
-                </p>
-                <div className="flex flex-wrap items-center gap-2 mt-2">
-                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-slate-200 shadow-sm text-xs font-semibold">
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-                    Anchor booked
-                  </span>
-                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-slate-200 shadow-sm text-xs font-semibold">
-                    <span className="w-2.5 h-2.5 rounded-full bg-sky-400" />
-                    SBPS / Recheck / Admin
-                  </span>
-                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-slate-200 shadow-sm text-xs font-semibold">
-                    ⏱ Recheck cycle: every 6h & payment time
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-5 overflow-x-auto px-1 py-8">
-              {STEPS.map((s, i) => (
-                <article key={s.n} className="flex items-start gap-3">
-                  <div className="flex-shrink-0 w-16 h-16 rounded-full bg-white border-4 border-sky-400 shadow flex items-center justify-center font-extrabold text-lg text-sky-900">
-                    {s.n}
-                  </div>
-                  <div
-                    className="flex-shrink-0 bg-white border border-slate-200 rounded-2xl shadow p-4"
-                    style={{ width: "min(360px, 80vw)" }}
-                  >
-                    <h3 className="font-bold text-base mb-2 flex items-center gap-2">
-                      {s.title}
-                      {s.pill && <span className={pillTone(s.pill.tone)}>{s.pill.text}</span>}
-                    </h3>
-                    <p className="text-slate-600 text-sm">{s.body}</p>
-                    {Array.isArray(s.pills) && (
-                      <p className="text-slate-600 text-sm mt-2 flex flex-wrap gap-2">
-                        {s.pills.map((p, idx) => (
-                          <span key={idx} className={pillTone(p.tone)}>{p.text}</span>
-                        ))}
-                      </p>
-                    )}
-                    {Array.isArray(s.outcomes) && (
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3">
-                        {s.outcomes.map((o, idx) => (
-                          <div key={idx} className="flex items-center gap-2 p-2 rounded-xl border border-slate-200 bg-white">
-                            <span className={pillTone(o.tone)}>{o.text}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  {i < STEPS.length - 1 && (
-                    <div className="self-center font-extrabold text-2xl text-sky-900">→</div>
+        <section className="my-7">
+          <div className="flex gap-5 overflow-x-auto px-1 py-8">
+            {STEPS.map((s, i) => (
+              <article key={s.n} className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-16 h-16 rounded-full bg-white border-4 border-sky-400 shadow flex items-center justify-center font-extrabold text-lg text-sky-900">{s.n}</div>
+                <div className="flex-shrink-0 bg-white border border-slate-200 rounded-2xl shadow p-4" style={{ width: "min(360px, 80vw)" }}>
+                  <h3 className="font-bold text-base mb-2 flex items-center gap-2">
+                    {s.title}
+                    {s.pill && <span className={pillTone(s.pill.tone)}>{s.pill.text}</span>}
+                  </h3>
+                  <p className="text-slate-600 text-sm">{s.body}</p>
+                  {Array.isArray(s.pills) && (
+                    <p className="text-slate-600 text-sm mt-2 flex flex-wrap gap-2">
+                      {s.pills.map((p, idx) => (<span key={idx} className={pillTone(p.tone)}>{p.text}</span>))}
+                    </p>
                   )}
-                </article>
-              ))}
-            </div>
-          </section>
-        )}
+                  {Array.isArray(s.outcomes) && (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3">
+                      {s.outcomes.map((o, idx) => (
+                        <div key={idx} className="flex items-center gap-2 p-2 rounded-xl border border-slate-200 bg-white">
+                          <span className={pillTone(o.tone)}>{o.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {i < STEPS.length - 1 && <div className="self-center font-extrabold text-2xl text-sky-900">→</div>}
+              </article>
+            ))}
+          </div>
+        </section>
 
-        {/* Filters */}
-        <h2 className="text-xl font-bold mt-6 mb-3">
-          Stand by Privacy Seat  Admin & Call Center Console
-        </h2>
+        <h2 className="text-xl font-bold mt-6 mb-3">Stand by Privacy Seat  Admin & Call Center Console</h2>
 
         <div className="grid grid-cols-1 md:grid-cols-[1fr_160px_180px_140px] gap-2 mb-3">
-          <input
-            className="px-3 py-2 rounded-lg border border-slate-200 bg-white"
-            placeholder="Search Flight ID, PNR, Name…"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-          />
-          <select
-            className="px-3 py-2 rounded-lg border border-slate-200 bg-white"
-            value={status}
-            onChange={e => setStatus(e.target.value)}
-          >
+          <input className="px-3 py-2 rounded-lg border border-slate-200 bg-white" placeholder="Search Flight ID, PNR, Name…" value={query} onChange={e => setQuery(e.target.value)} />
+          <select className="px-3 py-2 rounded-lg border border-slate-200 bg-white" value={status} onChange={e => setStatus(e.target.value)}>
             <option value="">All Statuses</option>
-            <option>pending</option><option>standby</option><option>purchased</option>
-            <option>converted</option><option>refunded</option><option>completed</option><option>cancelled</option>
+            <option>pending</option><option>standby</option><option>purchased</option><option>converted</option><option>refunded</option><option>completed</option><option>cancelled</option>
           </select>
-          <select
-            className="px-3 py-2 rounded-lg border border-slate-200 bg-white"
-            value={flightStatus}
-            onChange={e => setFlightStatus(e.target.value)}
-          >
+          <select className="px-3 py-2 rounded-lg border border-slate-200 bg-white" value={flightStatus} onChange={e => setFlightStatus(e.target.value)}>
             <option value="">All Flight Status</option>
             <option>scheduled</option><option>delayed</option><option>cancelled</option><option>departed</option>
           </select>
-          <button
-            className="px-3 py-2 rounded-lg border border-slate-200 bg-white font-semibold shadow-sm"
-            onClick={() => exportCsv(filtered)}
-          >
-            Export CSV
-          </button>
+          <button className="px-3 py-2 rounded-lg border border-slate-200 bg-white font-semibold shadow-sm" onClick={() => exportCsv(filtered)}>Export CSV</button>
         </div>
 
-        {/* Table */}
         <div className="overflow-auto border border-slate-200 rounded-2xl bg-white shadow-sm">
           <table className="w-full border-separate border-spacing-0 text-sm">
             <thead className="bg-slate-50 text-slate-700 sticky top-0">
               <tr>
-                <Th>Flight ID</Th><Th>PNR</Th><Th>Name</Th><Th>SBPS Seat</Th><Th>Anchor Seat</Th>
-                <Th>Block Seats</Th><Th>Price</Th><Th>Deposit</Th><Th>Expires</Th><Th>Status</Th><Th>Flight</Th><Th>Actions</Th>
+                <Th>Flight ID</Th><Th>PNR</Th><Th>Name</Th><Th>SBPS Seat</Th><Th>Anchor Seat</Th><Th>Block Seats</Th><Th>Price</Th><Th>Deposit</Th><Th>Expires</Th><Th>Status</Th><Th>Flight</Th><Th>Actions</Th>
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 && (
-                <tr><td colSpan={12} className="py-6 text-center text-slate-500">No records found.</td></tr>
-              )}
+              {filtered.length === 0 && <tr><td colSpan={12} className="py-6 text-center text-slate-500">No records found.</td></tr>}
               {filtered.map((r, i) => {
                 const refundable = isRefundable(r.status);
                 return (
@@ -258,9 +175,7 @@ export default function SbpsAdminConsole() {
                           title={!refundable ? "Refund only for converted/cancelled" : "Issue refund"}
                           onClick={() => refundable && openRefund(r)}
                           disabled={!refundable}
-                        >
-                          Refund
-                        </button>
+                        >Refund</button>
                         <button className="px-2 py-1 rounded-md border border-slate-200 bg-white hover:bg-slate-50">Release</button>
                       </div>
                     </Td>
@@ -277,12 +192,8 @@ export default function SbpsAdminConsole() {
         </footer>
       </div>
 
-      {/* Refund modal */}
       {modalOpen && (
-        <div
-          className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
-          onClick={(e) => e.target === e.currentTarget && closeRefund()}
-        >
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={(e) => e.target === e.currentTarget && closeRefund()}>
           <div className="w-full max-w-2xl bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
               <h3 className="font-semibold">Issue Refund</h3>
@@ -292,9 +203,7 @@ export default function SbpsAdminConsole() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <Field label="Flight ID"><input className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50" value={activeRow?.flight_id || ""} readOnly /></Field>
                 <Field label="PNR"><input className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50" value={activeRow?.reservation_code || ""} readOnly /></Field>
-                <div className="md:col-span-2">
-                  <Field label="Passenger"><input className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50" value={`${activeRow?.first_name || ""} ${activeRow?.last_name || ""}`} readOnly /></Field>
-                </div>
+                <div className="md:col-span-2"><Field label="Passenger"><input className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50" value={`${activeRow?.first_name || ""} ${activeRow?.last_name || ""}`} readOnly /></Field></div>
               </div>
 
               <Field label="Refund Method">

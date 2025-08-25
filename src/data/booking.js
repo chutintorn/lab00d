@@ -1,31 +1,45 @@
 // src/data/booking.js
+import RAW from "./DMK-CNX-Roundtrip-4-pax-seats-bag.json";
 
-// โหลดข้อมูลจากไฟล์ JSON จริง
-import bookingJson from "./DMK-CNX-Roundtrip-4-pax-seats-bag.json";
-
-// Export ค่าที่ใช้เป็นแหล่งข้อมูลหลัก
-// คงโครงสร้าง { data: {...} } เพื่อให้ parseBooking() ใช้ได้เหมือนเดิม
-export const BOOKING_SOURCE = {
-  data: bookingJson.data
-};
+// เปิดไว้ให้ส่วนอื่นเรียกเหมือนเดิม
+export const BOOKING_SOURCE = RAW;
 
 /**
- * แปลงข้อมูล booking ให้พร้อมใช้ใน UI
- * @param {Object} json - ข้อมูล booking ในรูปแบบ { data: {...} }
- * @returns {Object} { confirmationNumber, legs: [...] }
+ * แปลง RAW booking JSON -> รูปแบบภายในแอป
+ * - ดึง flightNumber จาก airlines[i].travelInfos[0].flightNumber
+ * - ตั้ง title ของแต่ละ leg เป็น: "DD122 · DMK → CNX (8/10/2025, 5:15:00 AM)"
  */
-export function parseBooking(json) {
-  const conf = json?.data?.confirmationNumber || "UNKNOWN";
+export function parseBooking(src) {
+  const data = src?.data || {};
+  const airlines = Array.isArray(data.airlines) ? data.airlines : [];
 
-  const legs = (json?.data?.airlines || []).map((leg, idx) => ({
-    key: `${conf}:${idx}`,
-    title: `${leg.origin} → ${leg.destination} (${new Date(leg.departureTime).toLocaleString()})`,
-    passengers: (leg.passengerDetails || []).map((p) => ({
+  const legs = airlines.map((ai, i) => {
+    const flightNumber = ai?.travelInfos?.[0]?.flightNumber || null; // เลขไฟลต์
+    // แปลงวันเวลาให้อ่านง่าย
+    const dep = ai?.departureTime ? new Date(ai.departureTime.replace(" ", "T")) : null;
+    const depTxt = dep ? dep.toLocaleString() : "";
+
+    const title = `${flightNumber ? `${flightNumber} · ` : ""}${ai.origin} → ${ai.destination}${depTxt ? ` (${depTxt})` : ""}`;
+
+    // ผู้โดยสารของเล็ก
+    const passengers = (ai.passengerDetails || []).map((p) => ({
       id: String(p.paxNumber),
-      name: `${p.title ?? ""} ${p.firstName ?? ""} ${p.lastName ?? ""}`.trim(),
+      // รวมคำนำหน้าไว้ด้วย (MR/MS/ฯลฯ)
+      name: `${p.title ?? ""} ${p.firstName ?? ""} ${p.lastName ?? ""}`.replace(/\s+/g, " ").trim(),
       seat: p.seatSelect || "",
-    })),
-  }));
+    }));
 
-  return { confirmationNumber: conf, legs };
+    return {
+      key: `${ai.origin}-${ai.destination}-${i}`,
+      title,
+      flightNumber,
+      origin: ai.origin,
+      destination: ai.destination,
+      departureTime: ai.departureTime,
+      arrivalTime: ai.arrivalTime,
+      passengers,
+    };
+  });
+
+  return { legs };
 }

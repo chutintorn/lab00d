@@ -2,19 +2,26 @@ import React from "react";
 
 /**
  * Renders one seat row.
- * resolver(col, row) returns:
- *   { id, bg, selected, highlighted, disabled, isPrivacy, onClick }
+ * resolver(col, row) should return:
+ *   {
+ *     id, bg, selected, highlighted, disabled, isPrivacy, onClick,
+ *     priceTHB, showPrices, zoneType, title
+ *   }
  */
-export default function SeatRow({ row, leftBlock = [], rightBlock = [], resolver }) {
+export default function SeatRow({
+  row,
+  leftBlock = [],
+  rightBlock = [],
+  resolver,
+  showPrices = false,
+}) {
   const hiddenRow1 = new Set(["H", "J", "K"]);
 
   const renderSeat = (rawCol) => {
     const col = String(rawCol).toUpperCase();
 
     // Hide H/J/K only for row 1
-    if (Number(row) === 1 && hiddenRow1.has(col)) {
-      return null;
-    }
+    if (Number(row) === 1 && hiddenRow1.has(col)) return null;
 
     const seat = resolver(col, row) || {};
     const {
@@ -25,10 +32,16 @@ export default function SeatRow({ row, leftBlock = [], rightBlock = [], resolver
       disabled = false,
       isPrivacy = false,
       onClick = () => {},
+
+      priceTHB = 0,
+      showPrices: seatShowPrices,
+      title,
     } = seat;
 
+    const shouldShowPrice = (seatShowPrices ?? showPrices) && priceTHB > 0;
+
     const base =
-      "inline-flex items-center justify-center w-10 h-10 rounded text-sm border transition-colors";
+      "inline-flex flex-col items-center justify-center w-10 h-10 rounded text-sm border transition-colors relative";
     const style = { backgroundColor: bg };
 
     const privacyInset = isPrivacy
@@ -44,6 +57,14 @@ export default function SeatRow({ row, leftBlock = [], rightBlock = [], resolver
       .filter(Boolean)
       .join(" ");
 
+    const aria = (() => {
+      let label = `Seat ${id}`;
+      if (shouldShowPrice) label += `, ${priceTHB.toLocaleString("th-TH")} THB`;
+      if (isPrivacy) label += " (privacy seat reserved)";
+      if (selected) label += " selected";
+      return label;
+    })();
+
     return (
       <button
         key={id}
@@ -52,16 +73,23 @@ export default function SeatRow({ row, leftBlock = [], rightBlock = [], resolver
         style={style}
         onClick={onClick}
         disabled={disabled}
-        title={id}
-        aria-label={id}
+        title={title || id}
+        aria-label={aria}
         aria-pressed={selected}
-      />
+      >
+        {/* hide seat code text per your preference */}
+        {shouldShowPrice && (
+          <span className="text-[9px] leading-none text-gray-800">
+            {priceTHB.toLocaleString("th-TH")} THB
+          </span>
+        )}
+      </button>
     );
   };
 
   return (
     <div className="flex items-center gap-3 py-1">
-      {/* Row number (left only) */}
+      {/* Row number (left) */}
       <div className="w-8 text-xs text-gray-500 text-right">{row}</div>
 
       {/* Left seats */}
