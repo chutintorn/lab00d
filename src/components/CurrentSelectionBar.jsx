@@ -60,7 +60,7 @@ export default function CurrentSelectionBar({
   return (
     <div
       className="w-full rounded-xl px-4 py-3 mb-3 shadow-sm"
-      style={{ backgroundColor: "#e6f8ff", border: `1px solid ${THEME.outline}` }}
+      style={{ backgroundColor: "#ebf9ff", border: `1px solid ${THEME.outline}` }}
     >
       {/* line 1 */}
       <div className="text-sm md:text-base font-semibold text-blue-700">
@@ -68,14 +68,14 @@ export default function CurrentSelectionBar({
       </div>
 
       {/* line 2 */}
-      <div className="text-[13px] md:text-sm text-blue-800 mt-1 flex flex-wrap items-center gap-y-1">
+      <div className="text-[14px] md:text-sm text-blue-800 mt-1 flex flex-wrap items-center gap-y-1">
         <span><span className="font-medium">{L.selectedSeat}:</span> {seatPart}</span>
         <span className="mx-2">|</span>
         <span><span className="font-medium">{L.baseSeat}:</span> {basePart}</span>
       </div>
 
       {/* line 3 */}
-      <div className="text-[19px] md:text-lg text-sky-500 mt-1 flex flex-wrap items-center gap-y-1">
+      <div className="text-[14px] md:text-sm text-green-700 mt-1 flex flex-wrap items-center gap-y-1">
   <span>
     <span className="font-medium">{L.privacy}:</span>{" "}
     <span className="font-normal">{privacyLeft}</span>
