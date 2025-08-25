@@ -75,11 +75,17 @@ export default function CurrentSelectionBar({
       </div>
 
       {/* line 3 */}
-      <div className="text-[14px] md:text-sm text-green-700 mt-1 flex flex-wrap items-center gap-y-1">
-        <span><span className="font-medium">{L.privacy}:</span> {privacyLeft}</span>
-        <span className="mx-2">|</span>
-        <span><span className="font-medium">{L.total}:</span> {totalRight}</span>
-      </div>
+      <div className="text-[19px] md:text-lg text-sky-500 mt-1 flex flex-wrap items-center gap-y-1">
+  <span>
+    <span className="font-medium">{L.privacy}:</span>{" "}
+    <span className="font-normal">{privacyLeft}</span>
+  </span>
+  <span className="mx-2">|</span>
+  <span>
+    <span className="font-medium">{L.total}:</span>{" "}
+    <span className="font-normal">{totalRight}</span>
+  </span>
+</div>
     </div>
   );
 }
