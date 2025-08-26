@@ -1,4 +1,3 @@
-// src/pages/PassengerBookingUpdateSeat.jsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 
 import TopBar from "../components/TopBar";
@@ -253,6 +252,16 @@ export default function PassengerBookingUpdateSeat() {
     [privacyBySeat, selectedPassengerId]
   );
 
+  // NEW 👉 build the actual seat labels for this passenger's privacy seats
+  const privacySeatIdsForCurrentPax = useMemo(
+    () =>
+      Object.entries(privacyBySeat || {})
+        .filter(([sid, pid]) => pid === selectedPassengerId)
+        .map(([sid]) => sid)
+        .sort(),
+    [privacyBySeat, selectedPassengerId]
+  );
+
   const privacyCost = (privacyCountForPax || 0) * (unitPrivacyFeeTHB || 0);
 
   // Eligible privacy = same row, same block, not booked
@@ -304,7 +313,7 @@ export default function PassengerBookingUpdateSeat() {
         >
           <div className="md:sticky md:top-4 md:h-[calc(100vh-120px)] md:max-h-[calc(100vh-120px)] md:overflow-auto">
 
-            {/* Yellow summary bar at the very top */}
+            {/* Current passenger summary */}
             <CurrentSelectionBar
               t={t}
               passengerName={
@@ -315,6 +324,8 @@ export default function PassengerBookingUpdateSeat() {
               basePriceTHB={baseSeatPriceTHB}
               privacyCount={privacyCountForPax}
               unitPrivacyFeeTHB={unitPrivacyFeeTHB}
+              /* NEW: show actual seat numbers, e.g., (1A, 1B) */
+              privacySeatIds={privacySeatIdsForCurrentPax}
             />
 
             <ControlsBar
