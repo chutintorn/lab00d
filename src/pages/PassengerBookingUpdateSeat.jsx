@@ -29,8 +29,8 @@ import {
   loadPrivacyForLeg,
   saveAll,
   clearAllShoppingData, // global clear helper (hard reset)
-  clearPassengerAllLegs, // ✅ clear this passenger on ALL flights
-  clearEveryoneAllLegs,  // ✅ clear ALL passengers on ALL flights
+  clearPassengerAllLegs, // clear this passenger on ALL flights
+  clearEveryoneAllLegs,  // clear ALL passengers on ALL flights
 } from "../utils/storage";
 
 import { BOOKING_SOURCE, parseBooking } from "../data/booking";
@@ -68,8 +68,8 @@ function LBL(lang = "EN") {
       shareLine: "แชร์ไปยัง LINE",
       emailCart: "ส่งอีเมล",
       clearAllCarts: "ล้างรถเข็นทั้งหมด (ทุกเที่ยวบิน)",
-      cancelPaxAllLegs: "ยกเลิกผู้โดยสารนี้ (ทุกเที่ยวบิน)",
-      cancelEveryoneAllLegs: "ยกเลิกผู้โดยสารทั้งหมด (ทุกเที่ยวบิน)",
+      cancelPaxAllLegs: "ยกเลิกที่นั่งผู้โดยสารนี้ (ทุกเที่ยวบิน)",
+      cancelEveryoneAllLegs: "ยกเลิกที่นั่งผู้โดยสารทั้งหมด (ทุกเที่ยวบิน)",
       // checkout modal
       checkout: "ชำระเงิน",
       paymentMethod: "วิธีการชำระเงิน",
@@ -123,8 +123,8 @@ function LBL(lang = "EN") {
     shareLine: "Share to LINE",
     emailCart: "Email Cart",
     clearAllCarts: "Clear All Carts (All Flights)",
-    cancelPaxAllLegs: "Cancel this passenger (all flights)",
-    cancelEveryoneAllLegs: "Cancel ALL passengers (all flights)",
+    cancelPaxAllLegs: "Cancel Seats for this passenger (all flights)",
+    cancelEveryoneAllLegs: "Cancel Seats for ALL passengers (all flights)",
     // checkout modal
     checkout: "Checkout",
     paymentMethod: "Payment Method",
@@ -167,8 +167,8 @@ export default function PassengerBookingUpdateSeat() {
   // Toggle to show/hide prices on the seat tiles
   const [showPrices, setShowPrices] = useState(false);
 
-  // Show/hide ALL-PASSENGERS shopping cart (LEFT PANEL, under FareSummary)
-  const [showCart, setShowCart] = useState(true);
+  // Shopping cart visible? (start hidden)
+  const [showCart, setShowCart] = useState(false);
 
   // Checkout modal
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -408,7 +408,6 @@ export default function PassengerBookingUpdateSeat() {
     if (!selectedPassengerId) return;
     if (!window.confirm(L.confirmCancelPaxAllLegs)) return;
 
-    // Clear in storage for ALL legs
     clearPassengerAllLegs(selectedPassengerId);
 
     // Sync current leg in-memory state
@@ -426,7 +425,6 @@ export default function PassengerBookingUpdateSeat() {
   const handleCancelAllPassengersAllFlights = useCallback(() => {
     if (!window.confirm(L.confirmCancelEveryoneAllLegs)) return;
 
-    // Clear in storage for ALL legs
     clearEveryoneAllLegs();
 
     // Sync current leg in-memory state
@@ -552,7 +550,7 @@ export default function PassengerBookingUpdateSeat() {
       const legKey = `${LS_PREFIX}${leg.key}`;
       const legPrivKey = `${LS_PRIV_PREFIX}${leg.key}`;
 
-      // ✅ Use live in-memory state for the current leg
+      // Use live in-memory state for the current leg
       let assLeg;
       let privLeg;
       if (leg.key === currentLeg.key) {
@@ -762,6 +760,7 @@ export default function PassengerBookingUpdateSeat() {
                 setLegIndex(i);
                 setSelectedSeat(null);
                 setSavedFlag(false);
+                setShowCart(false); // auto-hide cart on leg switch
               }}
               selectedPassengerId={selectedPassengerId}
               setSelectedPassengerId={(id) => {
@@ -890,34 +889,34 @@ export default function PassengerBookingUpdateSeat() {
 
                   {/* Action buttons under total */}
                   <div className="mt-3 flex flex-wrap gap-2 justify-end">
-                    {/* NEW: Cancel this passenger across ALL flights */}
+                    {/* Cancel this passenger across ALL flights */}
                     <button
                       type="button"
                       onClick={handleCancelPassengerAllFlights}
-                       className="px-3 py-1.5 rounded-lg text-red-800 border bg-red-100 hover:bg-red-200"
+                      className="px-3 py-1.5 rounded-lg border border-red-300 bg-red-50 text-red-700 hover:bg-red-100"
                       style={{ borderColor: THEME.outline }}
                       disabled={!selectedPassengerId}
                       title={L.cancelPaxAllLegs}
                     >
-                      ❌ {L.cancelPaxAllLegs}
+                      ⛔ {L.cancelPaxAllLegs}
                     </button>
 
-                    {/* NEW: Cancel ALL passengers across ALL flights */}
+                    {/* Cancel ALL passengers across ALL flights */}
                     <button
                       type="button"
                       onClick={handleCancelAllPassengersAllFlights}
-                      className="px-3 py-1.5 rounded-lg text-red-800 border bg-red-100 hover:bg-red-200"
+                      className="px-3 py-1.5 rounded-lg border border-red-400 bg-red-100 text-red-800 hover:bg-red-200"
                       style={{ borderColor: THEME.outline }}
                       title={L.cancelEveryoneAllLegs}
                     >
-                     ❌❌  {L.cancelEveryoneAllLegs}
+                      ⛔⛔ {L.cancelEveryoneAllLegs}
                     </button>
 
                     {/* Global clear-all carts (ALL flights & passengers) */}
                     <button
                       type="button"
                       onClick={handleClearAllShoppingGlobal}
-                      className="px-3 py-1.5 rounded-lg border bg-gray-200 text-b-700 hover:bg-gray-300"
+                      className="px-3 py-1.5 rounded-lg border bg-zinc-100 text-gray-700 hover:bg-zinc-200"
                       style={{ borderColor: THEME.outline }}
                       title={L.clearAllCarts}
                     >
@@ -935,7 +934,7 @@ export default function PassengerBookingUpdateSeat() {
                     <button
                       type="button"
                       onClick={handleShareLine}
-                      className="px-3 py-1.5 rounded-lg text-white bg-green-500 hover:bg-green-600"
+                      className="px-3 py-1.5 rounded-lg text-white bg-emerald-500 hover:bg-emerald-600"
                       title="Share via LINE"
                     >
                       💬 {L.shareLine}
@@ -944,7 +943,7 @@ export default function PassengerBookingUpdateSeat() {
                     <button
                       type="button"
                       onClick={handleEmailCart}
-                      className="px-3 py-1.5 rounded-lg border bg-nokYellow-400 hover:bg-gray-50"
+                      className="px-3 py-1.5 rounded-lg text-white bg-amber-400 hover:bg-amber-500"
                       style={{ borderColor: THEME.outline }}
                       title="Send by Email"
                     >
@@ -954,7 +953,7 @@ export default function PassengerBookingUpdateSeat() {
                     <button
                       type="button"
                       onClick={() => setShowCart(false)}
-                      className="px-3 py-1.5 rounded-lg border bg-skyBlue-200 hover:bg-gray-50"
+                      className="px-3 py-1.5 rounded-lg border bg-slate-200 text-slate-800 hover:bg-slate-300"
                       style={{ borderColor: THEME.outline }}
                     >
                       {L.closeCart}
@@ -1175,7 +1174,7 @@ export default function PassengerBookingUpdateSeat() {
                   {L.cancel}
                 </button>
                 <button
-                  className="px-3 py-1.5 rounded-lg text-blue-100 bg-skyBlue-100 hover:bg-blue-700 text-sm"
+                  className="px-3 py-1.5 rounded-lg text-white bg-blue-600 hover:bg-blue-700 text-sm"
                   onClick={handlePayNow}
                 >
                   {L.payNow}
