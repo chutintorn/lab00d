@@ -8,16 +8,19 @@ import PrivacyControls from "../components/PrivacyControls";
 import FareSummary from "../components/FareSummary";
 import SeatMap from "../components/SeatMap";
 import CurrentSelectionBar from "../components/CurrentSelectionBar";
+import Collapse from "../components/Collapse";
 
 import { aircraftConfig } from "../config/aircraft";
 import { STR } from "../i18n/strings";
 import { THEME } from "../config/theme";
+
 import {
   seatColumn,
   seatRowNum,
   groupForCol,
   getZoneForSeat,
 } from "../utils/seatHelpers";
+
 import {
   LS_PREFIX,
   LS_PRIV_PREFIX,
@@ -25,16 +28,19 @@ import {
   loadAssignmentsForLeg,
   loadPrivacyForLeg,
   saveAll,
+  clearAllShoppingData, // global clear helper (hard reset)
+  clearPassengerAllLegs, // ✅ clear this passenger on ALL flights
+  clearEveryoneAllLegs,  // ✅ clear ALL passengers on ALL flights
 } from "../utils/storage";
+
 import { BOOKING_SOURCE, parseBooking } from "../data/booking";
+
 import {
   ZONE_PRICE_THB,
   PRIVACY_FEE_PER_ZONE_THB,
   computePrivacyRefundTHB,
   CURRENCY,
 } from "../utils/pricingConstants";
-
-import Collapse from "../components/Collapse";
 
 /* ------------------------------------------------------------------
  * Localized labels (EN/TH) for cart + checkout + share/email
@@ -61,6 +67,9 @@ function LBL(lang = "EN") {
       closeCart: "ปิดรถเข็น",
       shareLine: "แชร์ไปยัง LINE",
       emailCart: "ส่งอีเมล",
+      clearAllCarts: "ล้างรถเข็นทั้งหมด (ทุกเที่ยวบิน)",
+      cancelPaxAllLegs: "ยกเลิกผู้โดยสารนี้ (ทุกเที่ยวบิน)",
+      cancelEveryoneAllLegs: "ยกเลิกผู้โดยสารทั้งหมด (ทุกเที่ยวบิน)",
       // checkout modal
       checkout: "ชำระเงิน",
       paymentMethod: "วิธีการชำระเงิน",
@@ -81,6 +90,16 @@ function LBL(lang = "EN") {
       // share/email
       shareTitle: "สรุปตะกร้าที่นั่ง",
       shareCopyFallback: "คัดลอกข้อความไปยังคลิปบอร์ดแล้ว",
+      // confirm
+      confirmClearAll: "ล้างรถเข็นทุกเที่ยวบินและผู้โดยสารทั้งหมดหรือไม่?",
+      confirmClearLeg: "ล้างการเลือกที่นั่งและความเป็นส่วนตัวสำหรับเที่ยวบินนี้หรือไม่?",
+      confirmResetFile:
+        "รีเซ็ตที่นั่งตามค่าเดิมจากไฟล์สำหรับเที่ยวบินนี้? (จะล้างความเป็นส่วนตัว)",
+      takenPrivacy: "ที่นั่งส่วนตัวถูกจองโดยผู้โดยสารคนอื่นแล้ว",
+      confirmCancelPaxAllLegs:
+        "ยืนยันยกเลิกที่นั่งและความเป็นส่วนตัวของผู้โดยสารคนนี้ในทุกเที่ยวบินหรือไม่?",
+      confirmCancelEveryoneAllLegs:
+        "ยืนยันยกเลิกที่นั่งและความเป็นส่วนตัวของผู้โดยสารทั้งหมดในทุกเที่ยวบินหรือไม่?",
     };
   }
   return {
@@ -103,6 +122,9 @@ function LBL(lang = "EN") {
     closeCart: "Close Cart",
     shareLine: "Share to LINE",
     emailCart: "Email Cart",
+    clearAllCarts: "Clear All Carts (All Flights)",
+    cancelPaxAllLegs: "Cancel this passenger (all flights)",
+    cancelEveryoneAllLegs: "Cancel ALL passengers (all flights)",
     // checkout modal
     checkout: "Checkout",
     paymentMethod: "Payment Method",
@@ -123,6 +145,16 @@ function LBL(lang = "EN") {
     // share/email
     shareTitle: "Seat Cart Summary",
     shareCopyFallback: "Copied summary to clipboard",
+    // confirm
+    confirmClearAll: "Clear ALL carts for ALL flights and passengers?",
+    confirmClearLeg: "Clear all local assignments & privacy for this flight?",
+    confirmResetFile:
+      "Reset seats to the original file values for this flight? (Privacy will be cleared)",
+    takenPrivacy: "This privacy seat is already taken by another passenger",
+    confirmCancelPaxAllLegs:
+      "Cancel all seats & privacy for this passenger across ALL flights?",
+    confirmCancelEveryoneAllLegs:
+      "Cancel ALL seats & privacy for ALL passengers across ALL flights?",
   };
 }
 
@@ -142,43 +174,48 @@ export default function PassengerBookingUpdateSeat() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("card"); // 'card' | 'bank' | 'qr'
 
+  // Booking
   const booking = useMemo(() => parseBooking(BOOKING_SOURCE), []);
+  const legs = booking?.legs || [];
   const [legIndex, setLegIndex] = useState(0);
-  const currentLeg = booking.legs[legIndex];
+  const currentLeg = legs[legIndex] || { passengers: [] };
 
-  // Bonus: build a short title like "TG123 BKK→HKT / TG124 HKT→BKK"
+  // Short title like "TG123 BKK→HKT / TG124 HKT→BKK"
   const bookingTitle = useMemo(() => {
-    if (!booking?.legs?.length) return "";
-    return booking.legs
+    if (!legs.length) return "";
+    return legs
       .map((leg) => {
-        const code = leg.flightNo || `${leg.origin || ""}-${leg.destination || ""}`;
+        const code =
+          leg.flightNo || `${leg.origin || ""}-${leg.destination || ""}`;
         const route =
           leg.origin && leg.destination ? `${leg.origin}→${leg.destination}` : "";
         return route ? `${code} ${route}` : code;
       })
       .join(" / ");
-  }, [booking]);
+  }, [legs]);
 
   /* -------------------------------------------
    * Build file seat map for the current leg
    * ------------------------------------------- */
   const fileSeatMap = useMemo(() => {
     const m = {};
-    for (const p of currentLeg.passengers) if (p.seat) m[p.id] = p.seat;
+    (currentLeg.passengers || []).forEach((p) => {
+      if (p.seat) m[p.id] = p.seat;
+    });
     return m;
   }, [currentLeg.passengers]);
 
   const paxIds = useMemo(
-    () => currentLeg.passengers.map((p) => p.id),
+    () => (currentLeg.passengers || []).map((p) => p.id),
     [currentLeg.passengers]
   );
 
   const legStorageKey = useMemo(
-    () => `${LS_PREFIX}${currentLeg.key}`,
+    () => `${LS_PREFIX}${currentLeg.key || ""}`,
     [currentLeg.key]
   );
   const legPrivacyKey = useMemo(
-    () => `${LS_PRIV_PREFIX}${currentLeg.key}`,
+    () => `${LS_PRIV_PREFIX}${currentLeg.key || ""}`,
     [currentLeg.key]
   );
 
@@ -227,7 +264,7 @@ export default function PassengerBookingUpdateSeat() {
     paxIds,
   ]);
 
-  // Persist on change
+  // Persist on change (kept)
   useEffect(() => {
     saveAll(legStorageKey, assignments);
   }, [legStorageKey, assignments]);
@@ -249,16 +286,22 @@ export default function PassengerBookingUpdateSeat() {
     []
   );
 
-  const clearAllPrivacyOfOwner = useCallback((ownerId) => {
-    setPrivacyBySeat((prev) => {
-      const next = { ...prev };
-      Object.entries(next).forEach(([sid, pid]) => {
-        if (pid === ownerId) delete next[sid];
+  // Persist privacy clears immediately to avoid cart lag
+  const clearAllPrivacyOfOwner = useCallback(
+    (ownerId) => {
+      setPrivacyBySeat((prev) => {
+        const next = { ...prev };
+        Object.entries(next).forEach(([sid, pid]) => {
+          if (pid === ownerId) delete next[sid];
+        });
+        saveAll(legPrivacyKey, next); // write-through
+        return next;
       });
-      return next;
-    });
-  }, []);
+    },
+    [legPrivacyKey]
+  );
 
+  // WRITE-THROUGH on book: saves to LS inside the state update to prevent flicker
   const handleBook = useCallback(() => {
     if (!selectedPassengerId || !selectedSeat) return;
 
@@ -273,6 +316,7 @@ export default function PassengerBookingUpdateSeat() {
           Object.entries(cleared).forEach(([sid, pid]) => {
             if (pid === ownerOfPrivacy) delete cleared[sid];
           });
+          saveAll(legPrivacyKey, cleared); // write-through
           return cleared;
         }
         return prevPriv;
@@ -290,31 +334,47 @@ export default function PassengerBookingUpdateSeat() {
         clearAllPrivacyOfOwner(selectedPassengerId);
 
       next[selectedPassengerId] = selectedSeat;
+
+      saveAll(legStorageKey, next); // write-through
       return next;
     });
 
     setSelectedSeat(null);
     setSavedFlag(false);
-  }, [selectedPassengerId, selectedSeat, clearAllPrivacyOfOwner]);
+  }, [
+    selectedPassengerId,
+    selectedSeat,
+    clearAllPrivacyOfOwner,
+    legStorageKey,
+    legPrivacyKey,
+  ]);
 
+  // WRITE-THROUGH on cancel: saves to LS inside the state update to prevent flicker
   const handleCancel = useCallback(() => {
     if (!selectedPassengerId) return;
-    setAssignments((prev) => ({ ...prev, [selectedPassengerId]: "" }));
+
+    setAssignments((prev) => {
+      const next = { ...prev, [selectedPassengerId]: "" };
+      saveAll(legStorageKey, next); // write-through
+      return next;
+    });
+
     clearAllPrivacyOfOwner(selectedPassengerId);
     setSelectedSeat(null);
     setSavedFlag(false);
-  }, [selectedPassengerId, clearAllPrivacyOfOwner]);
+  }, [selectedPassengerId, clearAllPrivacyOfOwner, legStorageKey]);
 
-  const handleClearAll = useCallback(() => {
-    if (!window.confirm("Clear all local assignments & privacy for this flight?"))
-      return;
+  const handleClearAllLeg = useCallback(() => {
+    if (!window.confirm(L.confirmClearLeg)) return;
     const empty = {};
     for (const id of paxIds) empty[id] = "";
     setAssignments(empty);
     setPrivacyBySeat({});
+    saveAll(legStorageKey, empty); // write-through
+    saveAll(legPrivacyKey, {});   // write-through
     setSelectedSeat(null);
     setSavedFlag(false);
-  }, [paxIds]);
+  }, [paxIds, L.confirmClearLeg, legStorageKey, legPrivacyKey]);
 
   const handleSaveLocal = useCallback(() => {
     saveAll(legStorageKey, assignments);
@@ -324,12 +384,7 @@ export default function PassengerBookingUpdateSeat() {
   }, [legStorageKey, legPrivacyKey, assignments, privacyBySeat]);
 
   const handleResetToFile = useCallback(() => {
-    if (
-      !window.confirm(
-        "Reset seats to the original file values for this flight? (Privacy will be cleared)"
-      )
-    )
-      return;
+    if (!window.confirm(L.confirmResetFile)) return;
     const seeded = hydrateWithPaxKeys(paxIds, fileSeatMap);
     setAssignments(seeded);
     setPrivacyBySeat({});
@@ -338,13 +393,53 @@ export default function PassengerBookingUpdateSeat() {
     saveAll(legPrivacyKey, {});
     setSavedFlag(true);
     setTimeout(() => setSavedFlag(false), 1500);
-  }, [fileSeatMap, paxIds, legStorageKey, legPrivacyKey]);
+  }, [fileSeatMap, paxIds, legStorageKey, legPrivacyKey, L.confirmResetFile]);
 
   const handleConfirmPrivacy = useCallback(() => {
     saveAll(legPrivacyKey, privacyBySeat);
     setSavedFlag(true);
     setTimeout(() => setSavedFlag(false), 1200);
   }, [legPrivacyKey, privacyBySeat]);
+
+  /* -------------------------------------------
+   * NEW: Global cancel helpers
+   * ------------------------------------------- */
+  const handleCancelPassengerAllFlights = useCallback(() => {
+    if (!selectedPassengerId) return;
+    if (!window.confirm(L.confirmCancelPaxAllLegs)) return;
+
+    // Clear in storage for ALL legs
+    clearPassengerAllLegs(selectedPassengerId);
+
+    // Sync current leg in-memory state
+    setAssignments((prev) => {
+      const next = { ...prev, [selectedPassengerId]: "" };
+      saveAll(legStorageKey, next);
+      return next;
+    });
+    clearAllPrivacyOfOwner(selectedPassengerId); // writes-through privacy map
+
+    setSelectedSeat(null);
+    setSavedFlag(false);
+  }, [selectedPassengerId, L.confirmCancelPaxAllLegs, clearAllPrivacyOfOwner, legStorageKey]);
+
+  const handleCancelAllPassengersAllFlights = useCallback(() => {
+    if (!window.confirm(L.confirmCancelEveryoneAllLegs)) return;
+
+    // Clear in storage for ALL legs
+    clearEveryoneAllLegs();
+
+    // Sync current leg in-memory state
+    const empty = {};
+    for (const id of paxIds) empty[id] = "";
+    setAssignments(empty);
+    setPrivacyBySeat({});
+    saveAll(legStorageKey, empty);
+    saveAll(legPrivacyKey, {});
+
+    setSelectedSeat(null);
+    setSavedFlag(false);
+  }, [L.confirmCancelEveryoneAllLegs, paxIds, legStorageKey, legPrivacyKey]);
 
   /* -------------------------------------------
    * Current pax derived values
@@ -411,17 +506,18 @@ export default function PassengerBookingUpdateSeat() {
       if (!selectedPassengerId) return;
       const owner = privacyBySeat[sid];
       if (owner && owner !== selectedPassengerId) {
-        alert(t.privacy.taken);
+        alert(L.takenPrivacy);
         return;
       }
       setPrivacyBySeat((prev) => {
         const next = { ...prev };
         if (next[sid] === selectedPassengerId) delete next[sid];
         else next[sid] = selectedPassengerId;
+        saveAll(legPrivacyKey, next); // write-through
         return next;
       });
     },
-    [selectedPassengerId, privacyBySeat, t.privacy.taken]
+    [selectedPassengerId, privacyBySeat, L.takenPrivacy, legPrivacyKey]
   );
 
   const clearPrivacyForCurrent = useCallback(() => {
@@ -430,10 +526,11 @@ export default function PassengerBookingUpdateSeat() {
   }, [selectedPassengerId, clearAllPrivacyOfOwner]);
 
   /* -------------------------------------------
-   * ALL-PASSENGERS SHOPPING CART (reads every leg from localStorage)
+   * ALL-PASSENGERS SHOPPING CART
+   *  (use live state for current leg; LS for others)
    * ------------------------------------------- */
   const legsCart = useMemo(() => {
-    if (!booking?.legs?.length) return [];
+    if (!legs.length) return [];
 
     const computeZoneFromSeat = (seatLabel) => {
       if (!seatLabel) return null;
@@ -443,7 +540,7 @@ export default function PassengerBookingUpdateSeat() {
       return getZoneForSeat(aircraftConfig, r, c) || null;
     };
 
-    return booking.legs.map((leg) => {
+    return legs.map((leg) => {
       const paxIdsForLeg = (leg.passengers || []).map((p) => p.id);
 
       // File seats for that leg
@@ -455,8 +552,16 @@ export default function PassengerBookingUpdateSeat() {
       const legKey = `${LS_PREFIX}${leg.key}`;
       const legPrivKey = `${LS_PRIV_PREFIX}${leg.key}`;
 
-      const assLeg = loadAssignmentsForLeg(legKey, fileMapLeg, paxIdsForLeg);
-      const privLeg = loadPrivacyForLeg(legPrivKey);
+      // ✅ Use live in-memory state for the current leg
+      let assLeg;
+      let privLeg;
+      if (leg.key === currentLeg.key) {
+        assLeg = hydrateWithPaxKeys(paxIdsForLeg, assignments);
+        privLeg = { ...privacyBySeat };
+      } else {
+        assLeg = loadAssignmentsForLeg(legKey, fileMapLeg, paxIdsForLeg);
+        privLeg = loadPrivacyForLeg(legPrivKey);
+      }
 
       const paxRows = (leg.passengers || []).map((p) => {
         const seatLabel = assLeg[p.id] || "";
@@ -493,8 +598,7 @@ export default function PassengerBookingUpdateSeat() {
 
       return {
         key: leg.key,
-        flightNo:
-          leg.flightNo || `${leg.origin || ""}-${leg.destination || ""}`,
+        flightNo: leg.flightNo || `${leg.origin || ""}-${leg.destination || ""}`,
         origin: leg.origin,
         destination: leg.destination,
         date: leg.date,
@@ -502,8 +606,7 @@ export default function PassengerBookingUpdateSeat() {
         legTotal,
       };
     });
-    // Recompute when current leg state changes so the cart stays live
-  }, [booking, assignments, privacyBySeat, lang]);
+  }, [legs, currentLeg.key, assignments, privacyBySeat, lang, L.none]);
 
   const grandTotalAllLegs = useMemo(
     () => legsCart.reduce((s, leg) => s + (leg.legTotal || 0), 0),
@@ -514,7 +617,6 @@ export default function PassengerBookingUpdateSeat() {
    * Share / Email helpers
    * ------------------------------------------- */
   const buildCartShareText = useCallback(() => {
-    // Compose a plain-text summary suitable for LINE or Email body
     const lines = [];
     lines.push(`${L.shareTitle}${bookingTitle ? ` — ${bookingTitle}` : ""}`);
     lines.push("");
@@ -553,7 +655,6 @@ export default function PassengerBookingUpdateSeat() {
   const handleShareLine = useCallback(() => {
     const text = buildCartShareText();
 
-    // Prefer LINE deep link (mobile), fallback to web share URL, then clipboard
     const lineApp = `line://msg/text/${encodeURIComponent(text)}`;
     const lineWeb = `https://line.me/R/msg/text/?${encodeURIComponent(text)}`;
 
@@ -585,9 +686,17 @@ export default function PassengerBookingUpdateSeat() {
     const mailto = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(
       body
     )}`;
-    // Use open instead of location to avoid navigation loss
     window.open(mailto, "_blank");
   }, [buildCartShareText, L.shareTitle, bookingTitle]);
+
+  /* -------------------------------------------
+   * Global clear-all carts (all flights & passengers)
+   * ------------------------------------------- */
+  const handleClearAllShoppingGlobal = useCallback(() => {
+    if (!window.confirm(L.confirmClearAll)) return;
+    clearAllShoppingData();
+    window.location.reload(); // rehydrate clean from file defaults
+  }, [L.confirmClearAll]);
 
   /* -------------------------------------------
    * Checkout handlers
@@ -597,7 +706,11 @@ export default function PassengerBookingUpdateSeat() {
   const handlePayNow = () => {
     alert(
       `${L.checkout} - ${
-        paymentMethod === "card" ? L.creditCard : paymentMethod === "bank" ? L.bankTransfer : L.qrCode
+        paymentMethod === "card"
+          ? L.creditCard
+          : paymentMethod === "bank"
+          ? L.bankTransfer
+          : L.qrCode
       }\n${L.grandTotal}: ${fmt(grandTotalAllLegs)} ${CURRENCY}\n\n(Demo only)`
     );
     setShowPaymentModal(false);
@@ -623,12 +736,11 @@ export default function PassengerBookingUpdateSeat() {
           style={{ borderColor: THEME.outline }}
         >
           <div className="md:sticky md:top-4 md:h-[calc(100vh-120px)] md:max-h-[calc(100vh-120px)] md:overflow-auto">
-
             {/* Current passenger summary */}
             <CurrentSelectionBar
               t={t}
               passengerName={
-                currentLeg.passengers.find((p) => p.id === selectedPassengerId)
+                currentLeg.passengers?.find((p) => p.id === selectedPassengerId)
                   ?.name || ""
               }
               currentSeat={currentSeat}
@@ -662,30 +774,8 @@ export default function PassengerBookingUpdateSeat() {
               handleBook={handleBook}
               handleSaveLocal={handleSaveLocal}
               handleResetToFile={handleResetToFile}
-              handleCancel={() => {
-                if (!selectedPassengerId) return;
-                setAssignments((prev) => ({
-                  ...prev,
-                  [selectedPassengerId]: "",
-                }));
-                clearAllPrivacyOfOwner(selectedPassengerId);
-                setSelectedSeat(null);
-                setSavedFlag(false);
-              }}
-              handleClearAll={() => {
-                if (
-                  !window.confirm(
-                    "Clear all local assignments & privacy for this flight?"
-                  )
-                )
-                  return;
-                const empty = {};
-                for (const id of paxIds) empty[id] = "";
-                setAssignments(empty);
-                setPrivacyBySeat({});
-                setSelectedSeat(null);
-                setSavedFlag(false);
-              }}
+              handleCancel={handleCancel}
+              handleClearAll={handleClearAllLeg} // per-leg clear (kept)
               savedFlag={savedFlag}
               showPrices={showPrices}
               onToggleShowPrices={() => setShowPrices((v) => !v)}
@@ -758,7 +848,8 @@ export default function PassengerBookingUpdateSeat() {
                             <span className="font-medium">{r.name}</span>
                             {" · "}
                             <span>
-                              {L.seat}: <span className="font-medium">{r.seat}</span>
+                              {L.seat}:{" "}
+                              <span className="font-medium">{r.seat}</span>
                             </span>
                             {" | "}
                             <span>
@@ -799,7 +890,39 @@ export default function PassengerBookingUpdateSeat() {
 
                   {/* Action buttons under total */}
                   <div className="mt-3 flex flex-wrap gap-2 justify-end">
-                 
+                    {/* NEW: Cancel this passenger across ALL flights */}
+                    <button
+                      type="button"
+                      onClick={handleCancelPassengerAllFlights}
+                       className="px-3 py-1.5 rounded-lg text-red-800 border bg-red-100 hover:bg-red-200"
+                      style={{ borderColor: THEME.outline }}
+                      disabled={!selectedPassengerId}
+                      title={L.cancelPaxAllLegs}
+                    >
+                      ❌ {L.cancelPaxAllLegs}
+                    </button>
+
+                    {/* NEW: Cancel ALL passengers across ALL flights */}
+                    <button
+                      type="button"
+                      onClick={handleCancelAllPassengersAllFlights}
+                      className="px-3 py-1.5 rounded-lg text-red-800 border bg-red-100 hover:bg-red-200"
+                      style={{ borderColor: THEME.outline }}
+                      title={L.cancelEveryoneAllLegs}
+                    >
+                     ❌❌  {L.cancelEveryoneAllLegs}
+                    </button>
+
+                    {/* Global clear-all carts (ALL flights & passengers) */}
+                    <button
+                      type="button"
+                      onClick={handleClearAllShoppingGlobal}
+                      className="px-3 py-1.5 rounded-lg border bg-gray-200 text-b-700 hover:bg-gray-300"
+                      style={{ borderColor: THEME.outline }}
+                      title={L.clearAllCarts}
+                    >
+                      {L.clearAllCarts}
+                    </button>
 
                     <button
                       type="button"
@@ -821,7 +944,7 @@ export default function PassengerBookingUpdateSeat() {
                     <button
                       type="button"
                       onClick={handleEmailCart}
-                      className="px-3 py-1.5 rounded-lg border bg-nokYellow-400  hover:bg-gray-50"
+                      className="px-3 py-1.5 rounded-lg border bg-nokYellow-400 hover:bg-gray-50"
                       style={{ borderColor: THEME.outline }}
                       title="Send by Email"
                     >
@@ -877,10 +1000,7 @@ export default function PassengerBookingUpdateSeat() {
           role="dialog"
         >
           {/* backdrop */}
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={closePayment}
-          />
+          <div className="absolute inset-0 bg-black/50" onClick={closePayment} />
           {/* dialog */}
           <div className="relative z-10 w-[92%] max-w-xl rounded-2xl bg-white border shadow-xl">
             <div
@@ -912,7 +1032,9 @@ export default function PassengerBookingUpdateSeat() {
                 <button
                   onClick={() => setPaymentMethod("card")}
                   className={`px-3 py-1.5 rounded-lg border ${
-                    paymentMethod === "card" ? "bg-blue-600 text-white" : "bg-white hover:bg-gray-50"
+                    paymentMethod === "card"
+                      ? "bg-blue-600 text-white"
+                      : "bg-white hover:bg-gray-50"
                   }`}
                   style={{ borderColor: THEME.outline }}
                 >
@@ -921,7 +1043,9 @@ export default function PassengerBookingUpdateSeat() {
                 <button
                   onClick={() => setPaymentMethod("bank")}
                   className={`px-3 py-1.5 rounded-lg border ${
-                    paymentMethod === "bank" ? "bg-blue-600 text-white" : "bg-white hover:bg-gray-50"
+                    paymentMethod === "bank"
+                      ? "bg-blue-600 text-white"
+                      : "bg-white hover:bg-gray-50"
                   }`}
                   style={{ borderColor: THEME.outline }}
                 >
@@ -930,7 +1054,9 @@ export default function PassengerBookingUpdateSeat() {
                 <button
                   onClick={() => setPaymentMethod("qr")}
                   className={`px-3 py-1.5 rounded-lg border ${
-                    paymentMethod === "qr" ? "bg-blue-600 text-white" : "bg-white hover:bg-gray-50"
+                    paymentMethod === "qr"
+                      ? "bg-blue-600 text-white"
+                      : "bg-white hover:bg-gray-50"
                   }`}
                   style={{ borderColor: THEME.outline }}
                 >
@@ -1024,15 +1150,14 @@ export default function PassengerBookingUpdateSeat() {
 
               {paymentMethod === "qr" && (
                 <div className="flex items-center gap-4">
-                  <div className="w-40 h-40 bg-white border grid place-content-center rounded-lg"
-                       style={{ borderColor: THEME.outline }}>
+                  <div
+                    className="w-40 h-40 bg-white border grid place-content-center rounded-lg"
+                    style={{ borderColor: THEME.outline }}
+                  >
                     {/* Simple QR placeholder */}
                     <div className="w-28 h-28 bg-gray-200 grid grid-cols-5 grid-rows-5 gap-1 p-2">
                       {Array.from({ length: 25 }).map((_, i) => (
-                        <div
-                          key={i}
-                          className={i % 2 ? "bg-gray-400" : "bg-white"}
-                        />
+                        <div key={i} className={i % 2 ? "bg-gray-400" : "bg-white"} />
                       ))}
                     </div>
                   </div>
