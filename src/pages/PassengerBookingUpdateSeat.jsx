@@ -29,8 +29,8 @@ import {
   loadPrivacyForLeg,
   saveAll,
   clearAllShoppingData, // global clear helper (hard reset)
-  clearPassengerAllLegs, // clear this passenger on ALL flights
-  clearEveryoneAllLegs,  // clear ALL passengers on ALL flights
+  clearPassengerAllLegs, // keep as safety net
+  clearEveryoneAllLegs,  // keep as safety net
 } from "../utils/storage";
 
 import { BOOKING_SOURCE, parseBooking } from "../data/booking";
@@ -68,7 +68,7 @@ function LBL(lang = "EN") {
       shareLine: "แชร์ไปยัง LINE",
       emailCart: "ส่งอีเมล",
       clearAllCarts: "ล้างรถเข็นทั้งหมด (ทุกเที่ยวบิน)",
-      cancelPaxAllLegs: "ยกเลิกที่นั่งผู้โดยสารนี้ (ทุกเที่ยวบิน)",
+      cancelPaxAllLegs: "ยกเลิกที่นั่งผู้โดยสารท่านนี้ (ทุกเที่ยวบิน)",
       cancelEveryoneAllLegs: "ยกเลิกที่นั่งผู้โดยสารทั้งหมด (ทุกเที่ยวบิน)",
       // checkout modal
       checkout: "ชำระเงิน",
@@ -123,8 +123,8 @@ function LBL(lang = "EN") {
     shareLine: "Share to LINE",
     emailCart: "Email Cart",
     clearAllCarts: "Clear All Carts (All Flights)",
-    cancelPaxAllLegs: "Cancel Seats for this passenger (all flights)",
-    cancelEveryoneAllLegs: "Cancel Seats for ALL passengers (all flights)",
+    cancelPaxAllLegs: "Cancel seat for this passenger (all flights)",
+    cancelEveryoneAllLegs: "Cancel seats for ALL passengers (all flights)",
     // checkout modal
     checkout: "Checkout",
     paymentMethod: "Payment Method",
@@ -167,7 +167,7 @@ export default function PassengerBookingUpdateSeat() {
   // Toggle to show/hide prices on the seat tiles
   const [showPrices, setShowPrices] = useState(false);
 
-  // Shopping cart visible? (start hidden)
+  // Show/hide ALL-PASSENGERS shopping cart (hidden by default)
   const [showCart, setShowCart] = useState(false);
 
   // Checkout modal
@@ -180,7 +180,7 @@ export default function PassengerBookingUpdateSeat() {
   const [legIndex, setLegIndex] = useState(0);
   const currentLeg = legs[legIndex] || { passengers: [] };
 
-  // Short title like "TG123 BKK→HKT / TG124 HKT→BKK"
+  // Title like "TG123 BKK→HKT / TG124 HKT→BKK"
   const bookingTitle = useMemo(() => {
     if (!legs.length) return "";
     return legs
@@ -194,9 +194,7 @@ export default function PassengerBookingUpdateSeat() {
       .join(" / ");
   }, [legs]);
 
-  /* -------------------------------------------
-   * Build file seat map for the current leg
-   * ------------------------------------------- */
+  /* Build file seat map for the current leg */
   const fileSeatMap = useMemo(() => {
     const m = {};
     (currentLeg.passengers || []).forEach((p) => {
@@ -219,9 +217,7 @@ export default function PassengerBookingUpdateSeat() {
     [currentLeg.key]
   );
 
-  /* -------------------------------------------
-   * Per-leg (active leg) state
-   * ------------------------------------------- */
+  /* Per-leg (active leg) state */
   const [assignments, setAssignments] = useState(() =>
     loadAssignmentsForLeg(legStorageKey, fileSeatMap, paxIds)
   );
@@ -234,9 +230,7 @@ export default function PassengerBookingUpdateSeat() {
   const [selectedSeat, setSelectedSeat] = useState(null);
   const [savedFlag, setSavedFlag] = useState(false);
 
-  /* -------------------------------------------
-   * Load per-leg data on leg switch + seed
-   * ------------------------------------------- */
+  /* Load per-leg data on leg switch + seed (first-visit only) */
   useEffect(() => {
     const loaded = loadAssignmentsForLeg(legStorageKey, fileSeatMap, paxIds);
     const loadedPrivacy = loadPrivacyForLeg(legPrivacyKey);
@@ -247,9 +241,11 @@ export default function PassengerBookingUpdateSeat() {
     setSelectedSeat(null);
     setSavedFlag(false);
 
+    // ✅ Seed from file ONLY when there is no LS record yet (first visit) AND file has seats
+    const lsHadAssignments = localStorage.getItem(legStorageKey) !== null;
     const hasAnyStoredSeat = Object.values(loaded).some(Boolean);
     const fileHasSeats = Object.keys(fileSeatMap).length > 0;
-    if (!hasAnyStoredSeat && fileHasSeats) {
+    if (!lsHadAssignments && !hasAnyStoredSeat && fileHasSeats) {
       const seeded = hydrateWithPaxKeys(paxIds, fileSeatMap);
       setAssignments(seeded);
       setPrivacyBySeat({});
@@ -301,7 +297,7 @@ export default function PassengerBookingUpdateSeat() {
     [legPrivacyKey]
   );
 
-  // WRITE-THROUGH on book: saves to LS inside the state update to prevent flicker
+  // WRITE-THROUGH on book
   const handleBook = useCallback(() => {
     if (!selectedPassengerId || !selectedSeat) return;
 
@@ -316,7 +312,7 @@ export default function PassengerBookingUpdateSeat() {
           Object.entries(cleared).forEach(([sid, pid]) => {
             if (pid === ownerOfPrivacy) delete cleared[sid];
           });
-          saveAll(legPrivacyKey, cleared); // write-through
+          saveAll(legPrivacyKey, cleared);
           return cleared;
         }
         return prevPriv;
@@ -328,14 +324,14 @@ export default function PassengerBookingUpdateSeat() {
       );
       if (seatOwner && seatOwner !== selectedPassengerId) next[seatOwner] = "";
 
-      // If current pax is moving seats, clear their previous privacy
+      // If current pax moves, clear their previous privacy
       const currentSeatOfPax = next[selectedPassengerId];
       if (currentSeatOfPax && currentSeatOfPax !== selectedSeat)
         clearAllPrivacyOfOwner(selectedPassengerId);
 
       next[selectedPassengerId] = selectedSeat;
 
-      saveAll(legStorageKey, next); // write-through
+      saveAll(legStorageKey, next);
       return next;
     });
 
@@ -349,13 +345,13 @@ export default function PassengerBookingUpdateSeat() {
     legPrivacyKey,
   ]);
 
-  // WRITE-THROUGH on cancel: saves to LS inside the state update to prevent flicker
+  // WRITE-THROUGH on cancel
   const handleCancel = useCallback(() => {
     if (!selectedPassengerId) return;
 
     setAssignments((prev) => {
       const next = { ...prev, [selectedPassengerId]: "" };
-      saveAll(legStorageKey, next); // write-through
+      saveAll(legStorageKey, next);
       return next;
     });
 
@@ -370,8 +366,8 @@ export default function PassengerBookingUpdateSeat() {
     for (const id of paxIds) empty[id] = "";
     setAssignments(empty);
     setPrivacyBySeat({});
-    saveAll(legStorageKey, empty); // write-through
-    saveAll(legPrivacyKey, {});   // write-through
+    saveAll(legStorageKey, empty);
+    saveAll(legPrivacyKey, {});
     setSelectedSeat(null);
     setSavedFlag(false);
   }, [paxIds, L.confirmClearLeg, legStorageKey, legPrivacyKey]);
@@ -402,46 +398,97 @@ export default function PassengerBookingUpdateSeat() {
   }, [legPrivacyKey, privacyBySeat]);
 
   /* -------------------------------------------
-   * NEW: Global cancel helpers
+   * FIX: Global cancel helpers now write overrides
+   *      for EVERY leg in this booking.
    * ------------------------------------------- */
   const handleCancelPassengerAllFlights = useCallback(() => {
     if (!selectedPassengerId) return;
     if (!window.confirm(L.confirmCancelPaxAllLegs)) return;
 
+    // Safety net for unknown legs
     clearPassengerAllLegs(selectedPassengerId);
 
-    // Sync current leg in-memory state
+    // Explicitly override for every leg in *this* booking
+    legs.forEach((leg) => {
+      const paxIdsForLeg = (leg.passengers || []).map((p) => p.id);
+
+      // file seats for that leg (to hydrate correctly)
+      const fileMapLeg = {};
+      (leg.passengers || []).forEach((p) => {
+        if (p.seat) fileMapLeg[p.id] = p.seat;
+      });
+
+      const key = `${LS_PREFIX}${leg.key}`;
+      const pkey = `${LS_PRIV_PREFIX}${leg.key}`;
+
+      // Load effective assignments, blank this pax, save
+      const assLeg = loadAssignmentsForLeg(key, fileMapLeg, paxIdsForLeg);
+      assLeg[selectedPassengerId] = "";
+      saveAll(key, assLeg); // ensure LS key exists (prevents re-seed later)
+
+      // Clear this pax from privacy map
+      const privLeg = { ...loadPrivacyForLeg(pkey) };
+      Object.entries(privLeg).forEach(([sid, pid]) => {
+        if (pid === selectedPassengerId) delete privLeg[sid];
+      });
+      saveAll(pkey, privLeg);
+    });
+
+    // Sync current leg in-memory
     setAssignments((prev) => {
       const next = { ...prev, [selectedPassengerId]: "" };
       saveAll(legStorageKey, next);
       return next;
     });
-    clearAllPrivacyOfOwner(selectedPassengerId); // writes-through privacy map
+    clearAllPrivacyOfOwner(selectedPassengerId);
 
     setSelectedSeat(null);
     setSavedFlag(false);
-  }, [selectedPassengerId, L.confirmCancelPaxAllLegs, clearAllPrivacyOfOwner, legStorageKey]);
+  }, [
+    selectedPassengerId,
+    L.confirmCancelPaxAllLegs,
+    legs,
+    legStorageKey,
+    clearAllPrivacyOfOwner,
+  ]);
 
   const handleCancelAllPassengersAllFlights = useCallback(() => {
     if (!window.confirm(L.confirmCancelEveryoneAllLegs)) return;
 
+    // Safety net for unknown legs in storage
     clearEveryoneAllLegs();
 
-    // Sync current leg in-memory state
-    const empty = {};
-    for (const id of paxIds) empty[id] = "";
-    setAssignments(empty);
+    // Explicitly override every leg in *this* booking
+    legs.forEach((leg) => {
+      const paxIdsForLeg = (leg.passengers || []).map((p) => p.id);
+      const key = `${LS_PREFIX}${leg.key}`;
+      const pkey = `${LS_PRIV_PREFIX}${leg.key}`;
+
+      const empty = {};
+      paxIdsForLeg.forEach((id) => (empty[id] = ""));
+      saveAll(key, empty);  // assignments -> "" (create/overwrite LS key)
+      saveAll(pkey, {});    // privacy -> cleared
+    });
+
+    // Sync current leg in-memory
+    const emptyCurrent = {};
+    for (const id of paxIds) emptyCurrent[id] = "";
+    setAssignments(emptyCurrent);
     setPrivacyBySeat({});
-    saveAll(legStorageKey, empty);
+    saveAll(legStorageKey, emptyCurrent);
     saveAll(legPrivacyKey, {});
 
     setSelectedSeat(null);
     setSavedFlag(false);
-  }, [L.confirmCancelEveryoneAllLegs, paxIds, legStorageKey, legPrivacyKey]);
+  }, [
+    L.confirmCancelEveryoneAllLegs,
+    legs,
+    paxIds,
+    legStorageKey,
+    legPrivacyKey,
+  ]);
 
-  /* -------------------------------------------
-   * Current pax derived values
-   * ------------------------------------------- */
+  /* Current pax derived values */
   const currentSeat = assignments[selectedPassengerId] || "";
 
   const currentZone = useMemo(() => {
@@ -511,7 +558,7 @@ export default function PassengerBookingUpdateSeat() {
         const next = { ...prev };
         if (next[sid] === selectedPassengerId) delete next[sid];
         else next[sid] = selectedPassengerId;
-        saveAll(legPrivacyKey, next); // write-through
+        saveAll(legPrivacyKey, next);
         return next;
       });
     },
@@ -523,10 +570,7 @@ export default function PassengerBookingUpdateSeat() {
     clearAllPrivacyOfOwner(selectedPassengerId);
   }, [selectedPassengerId, clearAllPrivacyOfOwner]);
 
-  /* -------------------------------------------
-   * ALL-PASSENGERS SHOPPING CART
-   *  (use live state for current leg; LS for others)
-   * ------------------------------------------- */
+  /* ALL-PASSENGERS SHOPPING CART (live for current leg; LS for others) */
   const legsCart = useMemo(() => {
     if (!legs.length) return [];
 
@@ -547,18 +591,17 @@ export default function PassengerBookingUpdateSeat() {
         if (p.seat) fileMapLeg[p.id] = p.seat;
       });
 
-      const legKey = `${LS_PREFIX}${leg.key}`;
-      const legPrivKey = `${LS_PRIV_PREFIX}${leg.key}`;
+      const key = `${LS_PREFIX}${leg.key}`;
+      const pkey = `${LS_PRIV_PREFIX}${leg.key}`;
 
-      // Use live in-memory state for the current leg
       let assLeg;
       let privLeg;
       if (leg.key === currentLeg.key) {
         assLeg = hydrateWithPaxKeys(paxIdsForLeg, assignments);
         privLeg = { ...privacyBySeat };
       } else {
-        assLeg = loadAssignmentsForLeg(legKey, fileMapLeg, paxIdsForLeg);
-        privLeg = loadPrivacyForLeg(legPrivKey);
+        assLeg = loadAssignmentsForLeg(key, fileMapLeg, paxIdsForLeg);
+        privLeg = loadPrivacyForLeg(pkey);
       }
 
       const paxRows = (leg.passengers || []).map((p) => {
@@ -611,9 +654,7 @@ export default function PassengerBookingUpdateSeat() {
     [legsCart]
   );
 
-  /* -------------------------------------------
-   * Share / Email helpers
-   * ------------------------------------------- */
+  /* Share / Email helpers */
   const buildCartShareText = useCallback(() => {
     const lines = [];
     lines.push(`${L.shareTitle}${bookingTitle ? ` — ${bookingTitle}` : ""}`);
@@ -687,18 +728,14 @@ export default function PassengerBookingUpdateSeat() {
     window.open(mailto, "_blank");
   }, [buildCartShareText, L.shareTitle, bookingTitle]);
 
-  /* -------------------------------------------
-   * Global clear-all carts (all flights & passengers)
-   * ------------------------------------------- */
+  /* Global clear-all carts (all flights & passengers) */
   const handleClearAllShoppingGlobal = useCallback(() => {
     if (!window.confirm(L.confirmClearAll)) return;
     clearAllShoppingData();
     window.location.reload(); // rehydrate clean from file defaults
   }, [L.confirmClearAll]);
 
-  /* -------------------------------------------
-   * Checkout handlers
-   * ------------------------------------------- */
+  /* Checkout handlers */
   const openPayment = () => setShowPaymentModal(true);
   const closePayment = () => setShowPaymentModal(false);
   const handlePayNow = () => {
@@ -714,9 +751,7 @@ export default function PassengerBookingUpdateSeat() {
     setShowPaymentModal(false);
   };
 
-  /* -------------------------------------------
-   * Render
-   * ------------------------------------------- */
+  /* Render */
   return (
     <div
       className="min-h-screen p-3 sm:p-4"
@@ -760,7 +795,6 @@ export default function PassengerBookingUpdateSeat() {
                 setLegIndex(i);
                 setSelectedSeat(null);
                 setSavedFlag(false);
-                setShowCart(false); // auto-hide cart on leg switch
               }}
               selectedPassengerId={selectedPassengerId}
               setSelectedPassengerId={(id) => {
@@ -774,7 +808,7 @@ export default function PassengerBookingUpdateSeat() {
               handleSaveLocal={handleSaveLocal}
               handleResetToFile={handleResetToFile}
               handleCancel={handleCancel}
-              handleClearAll={handleClearAllLeg} // per-leg clear (kept)
+              handleClearAll={handleClearAllLeg}
               savedFlag={savedFlag}
               showPrices={showPrices}
               onToggleShowPrices={() => setShowPrices((v) => !v)}
@@ -812,7 +846,7 @@ export default function PassengerBookingUpdateSeat() {
               unitPrivacyFeeTHB={unitPrivacyFeeTHB}
             />
 
-            {/* 🛒 Shopping Cart (ALL passengers • by flight) UNDER PRICE SUMMARY */}
+            {/* 🛒 Shopping Cart */}
             <div className="mt-4">
               <Collapse
                 open={showCart}
@@ -893,30 +927,30 @@ export default function PassengerBookingUpdateSeat() {
                     <button
                       type="button"
                       onClick={handleCancelPassengerAllFlights}
-                      className="px-3 py-1.5 rounded-lg border border-red-300 bg-red-50 text-red-700 hover:bg-red-100"
+                      className="px-3 py-1.5 rounded-lg text-red-800 border bg-red-100 hover:bg-red-200"
                       style={{ borderColor: THEME.outline }}
                       disabled={!selectedPassengerId}
                       title={L.cancelPaxAllLegs}
                     >
-                      ⛔ {L.cancelPaxAllLegs}
+                      ❌ {L.cancelPaxAllLegs}
                     </button>
 
                     {/* Cancel ALL passengers across ALL flights */}
                     <button
                       type="button"
                       onClick={handleCancelAllPassengersAllFlights}
-                      className="px-3 py-1.5 rounded-lg border border-red-400 bg-red-100 text-red-800 hover:bg-red-200"
+                      className="px-3 py-1.5 rounded-lg text-red-800 border bg-red-100 hover:bg-red-200"
                       style={{ borderColor: THEME.outline }}
                       title={L.cancelEveryoneAllLegs}
                     >
-                      ⛔⛔ {L.cancelEveryoneAllLegs}
+                      ❌❌ {L.cancelEveryoneAllLegs}
                     </button>
 
-                    {/* Global clear-all carts (ALL flights & passengers) */}
+                    {/* Global clear-all carts */}
                     <button
                       type="button"
                       onClick={handleClearAllShoppingGlobal}
-                      className="px-3 py-1.5 rounded-lg border bg-zinc-100 text-gray-700 hover:bg-zinc-200"
+                      className="px-3 py-1.5 rounded-lg border bg-gray-200 text-gray-700 hover:bg-gray-300"
                       style={{ borderColor: THEME.outline }}
                       title={L.clearAllCarts}
                     >
@@ -934,7 +968,7 @@ export default function PassengerBookingUpdateSeat() {
                     <button
                       type="button"
                       onClick={handleShareLine}
-                      className="px-3 py-1.5 rounded-lg text-white bg-emerald-500 hover:bg-emerald-600"
+                      className="px-3 py-1.5 rounded-lg text-white bg-green-500 hover:bg-green-600"
                       title="Share via LINE"
                     >
                       💬 {L.shareLine}
@@ -943,7 +977,7 @@ export default function PassengerBookingUpdateSeat() {
                     <button
                       type="button"
                       onClick={handleEmailCart}
-                      className="px-3 py-1.5 rounded-lg text-white bg-amber-400 hover:bg-amber-500"
+                      className="px-3 py-1.5 rounded-lg border bg-nokYellow-400 hover:bg-gray-50"
                       style={{ borderColor: THEME.outline }}
                       title="Send by Email"
                     >
@@ -953,7 +987,7 @@ export default function PassengerBookingUpdateSeat() {
                     <button
                       type="button"
                       onClick={() => setShowCart(false)}
-                      className="px-3 py-1.5 rounded-lg border bg-slate-200 text-slate-800 hover:bg-slate-300"
+                      className="px-3 py-1.5 rounded-lg border bg-skyBlue-200 hover:bg-gray-50"
                       style={{ borderColor: THEME.outline }}
                     >
                       {L.closeCart}
@@ -966,7 +1000,7 @@ export default function PassengerBookingUpdateSeat() {
           </div>
         </div>
 
-        {/* RIGHT PANEL — SeatMap unchanged and always visible */}
+        {/* RIGHT PANEL — SeatMap */}
         <div
           className="bg-white border rounded-2xl p-3 sm:p-4"
           style={{ borderColor: THEME.outline }}
@@ -1174,7 +1208,7 @@ export default function PassengerBookingUpdateSeat() {
                   {L.cancel}
                 </button>
                 <button
-                  className="px-3 py-1.5 rounded-lg text-white bg-blue-600 hover:bg-blue-700 text-sm"
+                  className="px-3 py-1.5 rounded-lg text-blue-100 bg-skyBlue-100 hover:bg-blue-700 text-sm"
                   onClick={handlePayNow}
                 >
                   {L.payNow}
